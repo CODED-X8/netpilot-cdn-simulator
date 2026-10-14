@@ -56,13 +56,19 @@ This document tracks the progress of each milestone in the Mini CDN Routing Simu
 ---
 
 ## Milestone M3: LLM Layer, Agent, Chat UI
-- **Status:** Pending
-- **Scope:**
-  - LLM client for OpenAI-compatible API configured by env vars + Fake provider
-  - Tool-calling agent with JSON-schema tools for service functions, max 5 steps, Pydantic validation
-  - Destructive tools confirmation safety check
-  - Number grounding check: verify all numbers in response match tool results
-  - Chat panel in dashboard with answer, expandable tools used, latency/tokens
-  - Agent and number check unit tests
-- **How to verify:** Pending
+- **Status:** Complete (Tag: `m3`)
+- **What was done:**
+  - `copilot/llm_provider.py`: Implemented `OpenAICompatibleProvider` (using pure standard library `urllib.request` with no external OpenAI SDK dependency) and `FakeLLMProvider` (deterministic query routing for offline execution and fast testing). Reads `LLM_API_KEY`, `LLM_BASE_URL`, and `LLM_MODEL`.
+  - `copilot/tools.py`: Implemented Pydantic argument models (`ShortestPathArgs`, `CompareAlgorithmsArgs`, `KillEdgeArgs`, `ResetNetworkArgs`, `WhatIfArgs`, `MaxFlowArgs`, `FindBottleneckArgs`, `GetMetricsArgs`, `ListNodesArgs`), OpenAI tool specifications, and dispatch execution into `services/network_service.py`.
+  - `copilot/verifier.py`: Grounded number verification comparing every numeric token in LLM explanations against numbers produced in tool outputs (within 1% tolerance), automatically flagging any ungrounded figures.
+  - `copilot/agent.py`: Agent loop with up to 5 tool steps, system prompt enforcing strict algorithmic grounding and active topology citations, destructive action confirmation gating for `kill_edge` and `reset_network`, and graceful offline response if `LLM_API_KEY` is unset.
+  - `dashboard/`:
+    - Added `POST /api/copilot/chat` endpoint supporting conversation history and action confirmation payloads.
+    - Updated `index.html` and `style.css` with "NetPilot Copilot" button, slide-out chat drawer, suggestion chips, message bubbles, and expandable `<details>` tools used accordions.
+    - Updated `static/js/app.js` with chat communication, message history rendering, expandable tool execution inspector, grounding status badge, and interactive confirmation button for destructive actions.
+  - `tests/test_copilot.py`: 7 tests covering Fake provider query mapping, Pydantic schema validation, destructive confirmation gate, number grounding verification, agent loop what-if execution, and Flask API endpoint.
+  - Test suite: **42 passing tests** (original 20 untouched + 22 new).
+- **How to verify:**
+  - Run `pytest -v tests/test_copilot.py tests/`
+  - Start `python dashboard/app.py`, open `http://localhost:5000`, click "🤖 NetPilot Copilot", click quick prompt chips or ask natural language queries.
 - **Known issues:** None.

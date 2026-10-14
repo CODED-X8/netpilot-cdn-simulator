@@ -812,6 +812,215 @@ if (btnSubmitUpload) {
   });
 }
 
+// ==========================================
+// NetPilot Copilot Chat Drawer
+// ==========================================
+const btnOpenChat = document.getElementById("btn-open-chat");
+const btnCloseChat = document.getElementById("btn-close-chat");
+const copilotDrawer = document.getElementById("copilot-drawer");
+const chatMessages = document.getElementById("chat-messages");
+const chatInput = document.getElementById("chat-input");
+const btnSendChat = document.getElementById("btn-send-chat");
+const chipButtons = document.querySelectorAll(".chip-btn");
+
+let chatHistory = [];
+
+if (btnOpenChat && copilotDrawer) {
+  btnOpenChat.addEventListener("click", () => {
+    copilotDrawer.style.display = copilotDrawer.style.display === "none" ? "flex" : "none";
+    if (copilotDrawer.style.display === "flex" && chatInput) {
+      chatInput.focus();
+    }
+  });
+}
+
+if (btnCloseChat && copilotDrawer) {
+  btnCloseChat.addEventListener("click", () => {
+    copilotDrawer.style.display = "none";
+  });
+}
+
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function formatMarkdown(text) {
+  if (!text) return "";
+  let s = escapeHtml(text);
+  s = s.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/`([^`]+)`/g, "<code style='background: rgba(255,255,255,0.1); padding: 2px 4px; border-radius: 4px;'>$1</code>");
+  s = s.replace(/\n/g, "<br>");
+  return s;
+}
+
+async function sendChatMessage(confirmedAction = null) {
+  const text = chatInput ? chatInput.value.trim() : "";
+  if (!text && !confirmedAction) return;
+
+  if (chatInput && !confirmedAction) {
+    chatInput.value = "";
+  }
+
+  // Render user message if not confirmation
+  if (!confirmedAction && chatMessages) {
+    const userMsgEl = document.createElement("div");
+    userMsgEl.className = "chat-msg chat-user";
+    userMsgEl.innerHTML = `<div class="msg-bubble">${escapeHtml(text)}</div>`;
+    chatMessages.appendChild(userMsgEl);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  // Render loading indicator
+  const loadingEl = document.createElement("div");
+  loadingEl.className = "chat-msg chat-assistant";
+  loadingEl.innerHTML = `<div class="msg-bubble" style="opacity: 0.7;">⚡ NetPilot is running network tools and verifying facts...</div>`;
+  if (chatMessages) {
+    chatMessages.appendChild(loadingEl);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  try {
+    const payload = confirmedAction
+      ? { confirm_action: confirmedAction, history: chatHistory }
+      : { message: text, history: chatHistory };
+
+    const res = await fetch("/api/copilot/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+    loadingEl.remove();
+
+    if (!res.ok) {
+      const errEl = document.createElement("div");
+      errEl.className = "chat-msg chat-assistant";
+      errEl.innerHTML = `<div class="msg-bubble" style="color: #f87171;">⚠️ ${escapeHtml(data.error || "Copilot request failed.")}</div>`;
+      chatMessages.appendChild(errEl);
+      return;
+    }
+
+    const assistantMsgEl = document.createElement("div");
+    assistantMsgEl.className = "chat-msg chat-assistant";
+
+    let toolsHtml = "";
+    if (data.tools_used && data.tools_used.length > 0) {
+      toolsHtml = `
+        <details class="tools-accordion">
+          <summary>🛠️ Tools Used (${data.tools_used.length})</summary>
+          <div class="tools-body"><pre>${escapeHtml(JSON.stringify(data.tools_used, null, 2))}</pre></div>
+        </details>
+      `;
+    }
+
+    let confirmationHtml = "";
+    if (data.requires_confirmation && data.confirmation_action) {
+      const actJson = escapeHtml(JSON.stringify(data.confirmation_action));
+      confirmationHtml = `
+        <div style="margin-top: 10px; display: flex; gap: 8px;">
+          <button class="btn btn-primary btn-confirm-action" data-action='${actJson}' style="background: #ef4444; font-size: 0.75rem; padding: 4px 10px;">
+            ⚠️ Confirm & Execute
+          </button>
+          <button class="btn btn-secondary btn-cancel-action" style="font-size: 0.75rem; padding: 4px 10px;">
+            Cancel
+          </button>
+        </div>
+      `;
+    }
+
+    const groundBadge = data.grounding_verified
+      ? '<span style="color: #34d399;">✅ Grounded</span>'
+      : '<span style="color: #fbbf24;">⚠️ Ungrounded</span>';
+
+    assistantMsgEl.innerHTML = `
+      <div class="msg-bubble">
+        ${formatMarkdown(data.answer)}
+        ${confirmationHtml}
+        ${toolsHtml}
+        <div class="msg-footer">
+          <span>${data.latency_ms} ms</span>
+          <span>${data.tokens} tokens</span>
+          <span>${groundBadge}</span>
+        </div>
+      </div>
+    `;
+
+    chatMessages.appendChild(assistantMsgEl);
+
+    // Wire confirmation buttons if present
+    const confirmBtn = assistantMsgEl.querySelector(".btn-confirm-action");
+    if (confirmBtn) {
+      confirmBtn.addEventListener("click", async () => {
+        const actData = JSON.parse(confirmBtn.getAttribute("data-action"));
+        actData.confirmed = true;
+        confirmBtn.disabled = true;
+        await sendChatMessage(actData);
+        await loadNetwork(false);
+      });
+    }
+    const cancelBtn = assistantMsgEl.querySelector(".btn-cancel-action");
+    if (cancelBtn) {
+      cancelBtn.addEventListener("click", () => {
+        const cBtn = assistantMsgEl.querySelector(".btn-confirm-action");
+        if (cBtn) cBtn.remove();
+        cancelBtn.remove();
+        const cancelNote = document.createElement("div");
+        cancelNote.style.color = "#94a3b8";
+        cancelNote.style.fontSize = "0.75rem";
+        cancelNote.style.marginTop = "6px";
+        cancelNote.textContent = "Operation cancelled.";
+        assistantMsgEl.querySelector(".msg-bubble").appendChild(cancelNote);
+      });
+    }
+
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+
+    // Update history
+    if (!confirmedAction) {
+      chatHistory.push({ role: "user", content: text });
+    }
+    chatHistory.push({ role: "assistant", content: data.answer });
+    if (chatHistory.length > 10) {
+      chatHistory = chatHistory.slice(-10);
+    }
+  } catch (err) {
+    if (loadingEl.parentNode) loadingEl.remove();
+    console.error("Copilot chat error:", err);
+  }
+}
+
+if (chipButtons) {
+  chipButtons.forEach((chip) => {
+    chip.addEventListener("click", () => {
+      const prompt = chip.getAttribute("data-prompt");
+      if (prompt && chatInput) {
+        chatInput.value = prompt;
+        sendChatMessage();
+      }
+    });
+  });
+}
+
+if (btnSendChat) {
+  btnSendChat.addEventListener("click", () => sendChatMessage());
+}
+
+if (chatInput) {
+  chatInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      sendChatMessage();
+    }
+  });
+}
+
 // Initialize on DOM load
 document.addEventListener("DOMContentLoaded", () => {
   loadNetwork();

@@ -21,6 +21,7 @@ import services.network_service as net_service
 import services.topology_service as topo_service
 from services.topology_service import TopologyValidationError
 from storage.event_store import get_event_store
+from copilot.agent import run_copilot_chat
 
 app = Flask(__name__)
 
@@ -452,6 +453,30 @@ def load_sample_topology_api():
         })
     except Exception as exc:
         return jsonify({"error": str(exc)}), 400
+
+
+@app.route("/api/copilot/chat", methods=["POST"])
+def copilot_chat_api():
+    """Chat endpoint for NetPilot AI Copilot."""
+    session_id = _get_session_id()
+    data = request.get_json(silent=True) or {}
+    message = data.get("message", "").strip()
+    history = data.get("history", [])
+    confirm_action = data.get("confirm_action")
+
+    if not message and not confirm_action:
+        return jsonify({"error": "Missing message or confirm_action in request"}), 400
+
+    try:
+        response_data = run_copilot_chat(
+            message=message,
+            session_id=session_id,
+            history=history,
+            confirm_action=confirm_action,
+        )
+        return jsonify(response_data)
+    except Exception as e:
+        return jsonify({"error": f"Copilot error: {str(e)}"}), 500
 
 
 @app.route("/api/benchmark-data", methods=["GET"])

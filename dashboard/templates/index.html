@@ -24,7 +24,10 @@
         📁 Load Topology
       </button>
       <button id="btn-open-benchmark" class="btn btn-benchmark">
-        📊 Benchmark Analytics
+        📊 Benchmark
+      </button>
+      <button id="btn-open-chat" class="btn btn-primary" style="background: linear-gradient(135deg, #8b5cf6, #3b82f6);">
+        🤖 NetPilot Copilot
       </button>
     </div>
   </header>
@@ -474,6 +477,46 @@
           <div id="upload-status-box" style="margin-top: 10px; display: none;"></div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- NetPilot AI Copilot Chat Drawer -->
+  <div id="copilot-drawer" class="chat-drawer" style="display: none;">
+    <div class="chat-header">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 1.2rem;">🤖</span>
+        <div>
+          <div style="font-weight: 700; font-size: 0.95rem; color: #a78bfa;">NetPilot Copilot</div>
+          <div style="font-size: 0.7rem; color: var(--text-muted);">Grounded Tool-Calling Operations Assistant</div>
+        </div>
+      </div>
+      <button id="btn-close-chat" class="btn-close">&times;</button>
+    </div>
+
+    <!-- Message History Area -->
+    <div id="chat-messages" class="chat-messages">
+      <div class="chat-msg chat-assistant">
+        <div class="msg-bubble">
+          👋 Hello! I am <strong>NetPilot</strong>, your autonomous network operations copilot.
+          <br><br>
+          I can simulate outages, check bottlenecks, compare routing algorithms, and analyze throughput.
+          <em>Every number I report is computed by the underlying graph engines and strictly verified against tool outputs.</em>
+        </div>
+      </div>
+    </div>
+
+    <!-- Suggested Quick Prompts -->
+    <div class="chat-suggestions">
+      <button class="chip-btn" data-prompt="What is the shortest path from user_1?">⚡ Shortest Path user_1</button>
+      <button class="chip-btn" data-prompt="Where is the network bottleneck?">🛑 Find Bottlenecks</button>
+      <button class="chip-btn" data-prompt="What happens if edge_1 fails?">⚠️ What-If Outage</button>
+      <button class="chip-btn" data-prompt="What is the maximum flow of the network?">🌊 Max Flow</button>
+    </div>
+
+    <!-- Chat Input Form -->
+    <div class="chat-input-area">
+      <input type="text" id="chat-input" placeholder="Ask NetPilot about topology, routes, or what-if failures..." class="dropdown" style="flex: 1;" />
+      <button id="btn-send-chat" class="btn btn-primary" style="background: #8b5cf6;">Send</button>
     </div>
   </div>
 
