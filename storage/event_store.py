@@ -122,7 +122,7 @@ class EventStore:
         with self._get_connection() as conn:
             conn.execute(
                 """
-                INSERT INTO events (id, timestamp, session_id, type, topology_name, inputs, results, ops_count, compute_time_ms)
+                INSERT OR REPLACE INTO events (id, timestamp, session_id, type, topology_name, inputs, results, ops_count, compute_time_ms)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
                 """,
                 (

@@ -594,6 +594,9 @@ btnKillEdge.addEventListener("click", async () => {
     const k = data.killed_edge;
     logFault(`💥 LINK FAILURE: Severed ${k.u} ↔ ${k.v} (${k.latency}ms)`, "kill");
 
+    const btnGenPm = document.getElementById("btn-generate-postmortem");
+    if (btnGenPm) btnGenPm.style.display = "block";
+
     await loadNetwork(true);
 
     if (previousState && selectedUserId && currentMode === "routing") {
@@ -636,6 +639,8 @@ btnReset.addEventListener("click", async () => {
     const data = await res.json();
     logFault("🔄 Network restored to baseline topology", "info");
     faultDiffCard.style.display = "none";
+    const btnGenPm = document.getElementById("btn-generate-postmortem");
+    if (btnGenPm) btnGenPm.style.display = "none";
     await loadNetwork(true);
   } catch (err) {
     console.error("Reset error:", err);
@@ -1018,6 +1023,79 @@ if (chatInput) {
       e.preventDefault();
       sendChatMessage();
     }
+  });
+}
+
+// ==========================================
+// Incident Postmortem Modal & Download
+// ==========================================
+const btnGenPostmortem = document.getElementById("btn-generate-postmortem");
+const postmortemModal = document.getElementById("postmortem-modal");
+const btnClosePostmortem = document.getElementById("btn-close-postmortem");
+const btnClosePostmortemFooter = document.getElementById("btn-close-postmortem-footer");
+const btnDownloadPostmortem = document.getElementById("btn-download-postmortem");
+const postmortemContent = document.getElementById("postmortem-content");
+const postmortemModalTitle = document.getElementById("postmortem-modal-title");
+
+let currentPostmortemMarkdown = "";
+let currentPostmortemId = "incident";
+
+if (btnGenPostmortem) {
+  btnGenPostmortem.addEventListener("click", async () => {
+    if (postmortemModal) postmortemModal.style.display = "flex";
+    if (postmortemContent) postmortemContent.textContent = "Synthesizing postmortem report from event telemetry...";
+
+    try {
+      const res = await fetch("/api/postmortem/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (postmortemContent) postmortemContent.textContent = `Error generating postmortem: ${data.error}`;
+        return;
+      }
+
+      currentPostmortemMarkdown = data.markdown;
+      currentPostmortemId = data.event_id || "incident";
+      if (postmortemModalTitle) {
+        postmortemModalTitle.textContent = `Incident Postmortem (${currentPostmortemId})`;
+      }
+      if (postmortemContent) {
+        postmortemContent.textContent = data.markdown;
+      }
+    } catch (err) {
+      if (postmortemContent) postmortemContent.textContent = `Request failed: ${err.message}`;
+    }
+  });
+}
+
+function closePostmortemModal() {
+  if (postmortemModal) postmortemModal.style.display = "none";
+}
+
+if (btnClosePostmortem) btnClosePostmortem.addEventListener("click", closePostmortemModal);
+if (btnClosePostmortemFooter) btnClosePostmortemFooter.addEventListener("click", closePostmortemModal);
+
+if (postmortemModal) {
+  postmortemModal.addEventListener("click", (e) => {
+    if (e.target === postmortemModal) closePostmortemModal();
+  });
+}
+
+if (btnDownloadPostmortem) {
+  btnDownloadPostmortem.addEventListener("click", () => {
+    if (!currentPostmortemMarkdown) return;
+    const blob = new Blob([currentPostmortemMarkdown], { type: "text/markdown;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `postmortem_${currentPostmortemId}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   });
 }
 

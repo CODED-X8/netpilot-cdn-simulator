@@ -227,6 +227,9 @@ class FakeLLMProvider(BaseLLMProvider):
                     f"According to standard operational procedures in '{path}' ({title}): "
                     f"Inspect the network status, assess latency impact, and execute verified actions."
                 )
+            elif tool_name == "generate_postmortem":
+                ev_id = tool_data.get("event_id", "incident")
+                content = f"Tool generate_postmortem created the incident postmortem report for {ev_id}. All numbers and event timelines are verified."
             else:
                 content = f"Tool {tool_name} executed successfully. Facts verified: {json.dumps(tool_data)}."
 
@@ -294,6 +297,12 @@ class FakeLLMProvider(BaseLLMProvider):
             return LLMResponse(
                 tool_calls=[LLMToolCall("call_search", "search_history", {"query": user_text, "limit": 3})],
                 prompt_tokens=170,
+                completion_tokens=25,
+            )
+        elif "postmortem" in user_text:
+            return LLMResponse(
+                tool_calls=[LLMToolCall("call_pm", "generate_postmortem", {})],
+                prompt_tokens=150,
                 completion_tokens=25,
             )
         else:

@@ -118,4 +118,29 @@ This document tracks the progress of each milestone in the Mini CDN Routing Simu
   - Start `python dashboard/app.py`, open `http://localhost:5000`, open Copilot drawer, and ask "What is the runbook procedure for link failure?"
 - **Known issues:** None.
 
+---
+
+## Milestone M6: Incident Postmortem Generator
+- **Status:** Complete (Tag: `m6`)
+- **What was done:**
+  - `services/postmortem_service.py`: Generates structured Markdown incident postmortems for network failure/outage events containing:
+    1. Summary (Incident identifier, timestamp, affected topology, target link)
+    2. Chronological Timeline (surrounding events table with timestamps, event types, compute durations)
+    3. Impact Assessment (affected communication link, baseline vs post-incident latency, delta ms, hop progression)
+    4. Root Cause Analysis (link severance details, shortest-path dynamic rerouting explanation)
+    5. Preventative Mitigations (topology redundancy, capacity headroom, runbook references)
+  - All numbers, hops, and event IDs are strictly sourced from SQLite event store telemetry and verified by grounding validators.
+  - `copilot/tools.py`: Registered `generate_postmortem` tool with Pydantic schema `GeneratePostmortemArgs`.
+  - `dashboard/app.py`: Added `POST /api/postmortem/generate` endpoint.
+  - `dashboard/templates/index.html` & `dashboard/static/js/app.js`:
+    - Added "📋 Generate Incident Postmortem" button in Fault Simulation panel that reveals after a failure occurs.
+    - Added interactive Postmortem Modal with syntax-highlighted preview and "⬇️ Download .md" button to export report directly.
+  - `tests/test_postmortem.py`: 4 tests for report sections, number grounding verification, event citation grounding, and Flask API endpoint.
+  - Test suite: **55 passing tests** (original 20 untouched + 35 new).
+- **How to verify:**
+  - Run `pytest -v tests/test_postmortem.py tests/`
+  - Start `python dashboard/app.py`, open `http://localhost:5000`, click "⚡ Kill Random Edge", then click "📋 Generate Incident Postmortem" to inspect the synthesized report and click "⬇️ Download .md".
+- **Known issues:** None.
+
+
 

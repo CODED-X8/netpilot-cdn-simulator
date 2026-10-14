@@ -59,6 +59,11 @@ class SearchHistoryArgs(BaseModel):
     limit: int = Field(3, description="Maximum number of relevant context chunks to retrieve.")
 
 
+class GeneratePostmortemArgs(BaseModel):
+    event_id: Optional[str] = Field(None, description="Event ID to generate postmortem for. Defaults to most recent failure.")
+    time_window_minutes: int = Field(60, description="Contextual event history time window in minutes.")
+
+
 TOOL_SCHEMAS: Dict[str, Any] = {
     "shortest_path": ShortestPathArgs,
     "compare_algorithms": CompareAlgorithmsArgs,
@@ -70,6 +75,7 @@ TOOL_SCHEMAS: Dict[str, Any] = {
     "get_metrics": GetMetricsArgs,
     "list_nodes": ListNodesArgs,
     "search_history": SearchHistoryArgs,
+    "generate_postmortem": GeneratePostmortemArgs,
 }
 
 
@@ -213,6 +219,20 @@ COPILOT_TOOLS_OPENAI_SPEC: List[Dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_postmortem",
+            "description": "Generate an incident postmortem report in structured Markdown format based on recorded network failure and outage events.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "event_id": {"type": "string", "description": "Specific event ID (e.g. 'evt_abc123'). If omitted, targets most recent outage event."},
+                    "time_window_minutes": {"type": "integer", "default": 60, "description": "Contextual timeline history window in minutes."},
+                },
+            },
+        },
+    },
 ]
 
 
@@ -319,6 +339,13 @@ def execute_tool_call(
                     for h in hits
                 ],
             }
+        elif function_name == "generate_postmortem":
+            from services.postmortem_service import generate_postmortem as gen_pm
+            res = gen_pm(
+                event_id=validated_args.get("event_id"),
+                session_id=session_id,
+                time_window_minutes=validated_args.get("time_window_minutes", 60),
+            )
         else:
             res = {"error": f"Unhandled tool {function_name}"}
 

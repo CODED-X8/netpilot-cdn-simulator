@@ -511,6 +511,26 @@ def copilot_chat_api():
         return jsonify({"error": f"Copilot error: {str(e)}"}), 500
 
 
+@app.route("/api/postmortem/generate", methods=["POST"])
+def generate_postmortem_api():
+    """Generate structured markdown postmortem report from event history."""
+    session_id = _get_session_id()
+    data = request.get_json(silent=True) or {}
+    event_id = data.get("event_id")
+    time_window = data.get("time_window_minutes", 60)
+
+    try:
+        from services.postmortem_service import generate_postmortem
+        result = generate_postmortem(
+            event_id=event_id,
+            session_id=session_id,
+            time_window_minutes=time_window,
+        )
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": f"Postmortem generation failed: {str(e)}"}), 500
+
+
 @app.route("/api/benchmark-data", methods=["GET"])
 def get_benchmark_data():
     """Read and return generated empirical benchmarking data."""
