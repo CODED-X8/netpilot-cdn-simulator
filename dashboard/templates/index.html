@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mini CDN Routing Simulator | DAA Review 1</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <!-- Vis.js Network -->
+  <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+</head>
+<body>
+  <header class="navbar">
+    <div class="brand">
+      <div class="logo-icon">🌐</div>
+      <div>
+        <h1>Mini CDN Routing Simulator</h1>
+        <span class="subtitle">Design & Analysis of Algorithms — Review 1</span>
+      </div>
+    </div>
+    <div class="nav-actions">
+      <span class="badge badge-info" id="topo-stats">20 Nodes | -- Links</span>
+      <button id="btn-open-benchmark" class="btn btn-benchmark">
+        📊 Benchmark Analytics
+      </button>
+    </div>
+  </header>
+
+  <main class="dashboard-container">
+    <!-- Sidebar / Control Panel -->
+    <aside class="sidebar">
+      <!-- 1. Algorithm Selection -->
+      <section class="panel">
+        <h2 class="panel-title">1. Routing Algorithm</h2>
+        <div class="algo-toggle">
+          <label class="radio-label">
+            <input type="radio" name="algorithm" value="bellman_ford" checked />
+            <span class="radio-custom"></span>
+            <div>
+              <strong>Bellman-Ford</strong>
+              <small class="text-muted">SSSP &bull; \(O(V \cdot E)\)</small>
+            </div>
+          </label>
+          <label class="radio-label">
+            <input type="radio" name="algorithm" value="floyd_warshall" />
+            <span class="radio-custom"></span>
+            <div>
+              <strong>Floyd-Warshall</strong>
+              <small class="text-muted">APSP &bull; \(O(V^3)\)</small>
+            </div>
+          </label>
+          <label class="radio-label radio-compare">
+            <input type="radio" name="algorithm" value="compare" />
+            <span class="radio-custom"></span>
+            <div>
+              <strong class="text-compare">⚔️ Compare Both (Cross-Validate)</strong>
+              <small class="text-muted">Side-by-side live execution & verification</small>
+            </div>
+          </label>
+        </div>
+      </section>
+
+      <!-- 2. Routing Source Target -->
+      <section class="panel">
+        <h2 class="panel-title">2. Select User Region</h2>
+        <p class="panel-hint">Click any teal User node on the canvas or pick below:</p>
+        <select id="user-select" class="dropdown">
+          <option value="">-- Choose User Region --</option>
+        </select>
+      </section>
+
+      <!-- 3. Network Fault Simulation -->
+      <section class="panel">
+        <h2 class="panel-title">3. Fault Simulation</h2>
+        <div class="btn-group">
+          <button id="btn-kill-edge" class="btn btn-danger">
+            ⚡ Kill Random Edge
+          </button>
+          <button id="btn-reset" class="btn btn-secondary">
+            🔄 Reset Network
+          </button>
+        </div>
+
+        <!-- Before vs After Fault Comparison Card -->
+        <div id="fault-diff-card" class="fault-diff-card" style="display: none;">
+          <div class="fault-diff-header">
+            <span class="fault-diff-tag">Fault Adaptation</span>
+            <span id="fault-diff-summary" class="fault-diff-summary">Link Severed</span>
+          </div>
+          <div class="fault-diff-body">
+            <div class="diff-row diff-before">
+              <span class="diff-label">BEFORE:</span>
+              <span id="diff-before-path" class="diff-val">--</span>
+              <span id="diff-before-lat" class="diff-badge diff-badge-severed">-- ms</span>
+            </div>
+            <div class="diff-row diff-after">
+              <span class="diff-label">AFTER:</span>
+              <span id="diff-after-path" class="diff-val">--</span>
+              <span id="diff-after-lat" class="diff-badge diff-badge-active">-- ms</span>
+            </div>
+            <div id="diff-delta" class="diff-delta">+0.0 ms adaptation latency</div>
+          </div>
+        </div>
+
+        <div id="fault-feed" class="fault-feed">
+          <div class="log-entry log-info">System initialized. Ready for routing.</div>
+        </div>
+      </section>
+
+      <!-- 4. Decision Telemetry -->
+      <section class="panel telemetry-panel">
+        <h2 class="panel-title">4. Decision Telemetry</h2>
+
+        <!-- Single Algorithm Mode View -->
+        <div id="telemetry-single-view">
+          <div class="telemetry-grid">
+            <div class="tele-item">
+              <span class="tele-label">Best Edge POP</span>
+              <span class="tele-value" id="tele-edge">--</span>
+            </div>
+            <div class="tele-item">
+              <span class="tele-label">End-to-End Latency</span>
+              <span class="tele-value highlight-val" id="tele-latency">--</span>
+            </div>
+            <div class="tele-item">
+              <span class="tele-label">Algorithm Used</span>
+              <span class="tele-value" id="tele-algo">--</span>
+            </div>
+            <div class="tele-item">
+              <span class="tele-label">Operation Count</span>
+              <span class="tele-value" id="tele-ops">--</span>
+            </div>
+            <div class="tele-item">
+              <span class="tele-label">Compute Time</span>
+              <span class="tele-value" id="tele-time">--</span>
+            </div>
+            <div class="tele-item">
+              <span class="tele-label">Hop Count</span>
+              <span class="tele-value highlight-hops" id="tele-hops">--</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dual Cross-Validation View -->
+        <div id="telemetry-compare-view" style="display: none;">
+          <div id="compare-agreement-badge" class="agreement-badge">
+            ✅ 100% Agreement: Both Algorithms Found Identical Optimal Route
+          </div>
+          <div class="compare-grid">
+            <div class="compare-card bf-card">
+              <div class="compare-card-title">Bellman-Ford (SSSP)</div>
+              <div class="compare-stat">
+                <span class="c-label">Latency:</span>
+                <span class="c-val" id="cmp-bf-lat">--</span>
+              </div>
+              <div class="compare-stat">
+                <span class="c-label">Operations:</span>
+                <span class="c-val" id="cmp-bf-ops">--</span>
+              </div>
+              <div class="compare-stat">
+                <span class="c-label">Time:</span>
+                <span class="c-val" id="cmp-bf-time">--</span>
+              </div>
+              <div class="compare-stat">
+                <span class="c-label">Complexity:</span>
+                <span class="c-val">\(O(V \cdot E)\)</span>
+              </div>
+            </div>
+
+            <div class="compare-card fw-card">
+              <div class="compare-card-title">Floyd-Warshall (APSP)</div>
+              <div class="compare-stat">
+                <span class="c-label">Latency:</span>
+                <span class="c-val" id="cmp-fw-lat">--</span>
+              </div>
+              <div class="compare-stat">
+                <span class="c-label">Operations:</span>
+                <span class="c-val" id="cmp-fw-ops">--</span>
+              </div>
+              <div class="compare-stat">
+                <span class="c-label">Time:</span>
+                <span class="c-val" id="cmp-fw-time">--</span>
+              </div>
+              <div class="compare-stat">
+                <span class="c-label">Complexity:</span>
+                <span class="c-val">\(O(V^3)\)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Full Path Sequence Box -->
+        <div class="path-display">
+          <span class="tele-label">Full Routed Path Sequence:</span>
+          <div class="path-sequence" id="tele-path">
+            <span class="text-muted">Select a user region above</span>
+          </div>
+        </div>
+      </section>
+    </aside>
+
+    <!-- Interactive Network Canvas -->
+    <section class="canvas-wrapper">
+      <div class="canvas-header">
+        <div class="legend">
+          <span class="legend-item"><span class="legend-dot origin-dot"></span> Origin DC</span>
+          <span class="legend-item"><span class="legend-dot edge-dot"></span> Edge POP (Core)</span>
+          <span class="legend-item"><span class="legend-dot user-dot"></span> User Region</span>
+          <span class="legend-item"><span class="legend-dot transit-dot"></span> ISP / Transit Relay</span>
+          <span class="legend-item"><span class="legend-line active-line"></span> Active Route</span>
+        </div>
+        <div class="canvas-actions">
+          <button id="btn-fit" class="btn-icon" title="Center & fit graph">⛶ Fit View</button>
+        </div>
+      </div>
+      <div id="network-canvas" class="network-canvas"></div>
+    </section>
+  </main>
+
+  <!-- Benchmark Analytics Modal -->
+  <div id="benchmark-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>📊 Empirical Complexity & Benchmark Analytics</h2>
+        <button id="btn-close-modal" class="btn-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="benchmark-grid">
+          <!-- Plot Display -->
+          <div class="benchmark-plot-container">
+            <h3>Measured Time & Operations vs Theoretical Complexity</h3>
+            <img src="/api/benchmark-image" alt="Empirical Complexity Plot" class="benchmark-img" />
+          </div>
+
+          <!-- Benchmark Metrics Table -->
+          <div class="benchmark-table-container">
+            <h3>Measured Benchmarking Data (Averaged Over Multi-Trials)</h3>
+            <div class="table-responsive">
+              <table class="benchmark-table" id="benchmark-table">
+                <thead>
+                  <tr>
+                    <th>|V|</th>
+                    <th>|E|</th>
+                    <th>BF Time</th>
+                    <th>BF Ops \(O(VE)\)</th>
+                    <th>FW Time</th>
+                    <th>FW Ops \(O(V^3)\)</th>
+                  </tr>
+                </thead>
+                <tbody id="benchmark-table-body">
+                  <tr><td colspan="6">Loading benchmark data...</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="benchmark-notes">
+              <p><strong>Theoretical Takeaways for Review 1:</strong></p>
+              <ul>
+                <li><strong>Floyd-Warshall</strong> scales strictly as \(O(V^3)\) (e.g. \(200^3 = 8,000,000\) operations).</li>
+                <li><strong>Bellman-Ford</strong> (single-source) scales as \(O(V \cdot E)\) (e.g. \(200 \times 10,148 \approx 2,029,600\) operations).</li>
+                <li>Atomic comparison tracking guarantees hardware-independent Big-O validation.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
