@@ -218,9 +218,18 @@ class Graph:
         """Filter nodes by node_type."""
         return [node for node in self.nodes.values() if node.node_type == node_type]
 
+    @property
+    def edges(self) -> List[Edge]:
+        """Convenience property returning all directed edges."""
+        return self.get_edges()
+
     def clone(self) -> "Graph":
         """Create a deep copy of the graph."""
         return copy.deepcopy(self)
+
+    def copy(self) -> "Graph":
+        """Alias for clone() to support standard copy semantics."""
+        return self.clone()
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize graph to dictionary for frontend visualization & REST APIs."""

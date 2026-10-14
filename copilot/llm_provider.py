@@ -230,6 +230,17 @@ class FakeLLMProvider(BaseLLMProvider):
             elif tool_name == "generate_postmortem":
                 ev_id = tool_data.get("event_id", "incident")
                 content = f"Tool generate_postmortem created the incident postmortem report for {ev_id}. All numbers and event timelines are verified."
+            elif tool_name == "propose_mitigations":
+                goal = tool_data.get("goal", "performance")
+                cands = tool_data.get("ranked_candidates", [])
+                top_cand = cands[0] if cands else {}
+                action = top_cand.get("action", "upgrade")
+                target = top_cand.get("target", "link")
+                content = (
+                    f"Tool propose_mitigations evaluated candidates on isolated graph copies for goal '{goal}'. "
+                    f"Top ranked candidate is {action} on {target}. "
+                    f"Rankings are strictly based on measured simulation metrics."
+                )
             else:
                 content = f"Tool {tool_name} executed successfully. Facts verified: {json.dumps(tool_data)}."
 
@@ -252,6 +263,17 @@ class FakeLLMProvider(BaseLLMProvider):
                 tool_calls=[LLMToolCall("call_what_if", "what_if", {"remove_edges": [edge], "source": "user_1"})],
                 prompt_tokens=180,
                 completion_tokens=30,
+            )
+        elif "mitigat" in user_text or "propose" in user_text or "optimize" in user_text:
+            goal = "maximize throughput"
+            if "latency" in user_text:
+                goal = "minimize latency"
+            elif "bottleneck" in user_text:
+                goal = "resolve bottleneck"
+            return LLMResponse(
+                tool_calls=[LLMToolCall("call_mitigations", "propose_mitigations", {"goal": goal})],
+                prompt_tokens=160,
+                completion_tokens=25,
             )
         elif "bottleneck" in user_text or "min cut" in user_text or "min-cut" in user_text:
             return LLMResponse(

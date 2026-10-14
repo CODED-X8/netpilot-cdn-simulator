@@ -1099,6 +1099,149 @@ if (btnDownloadPostmortem) {
   });
 }
 
+// ==========================================
+// Propose, Simulate, Verify Mitigations Modal
+// ==========================================
+const btnOpenMitigations = document.getElementById("btn-open-mitigations");
+const mitigationsModal = document.getElementById("mitigations-modal");
+const btnCloseMitigations = document.getElementById("btn-close-mitigations");
+const btnRunProposals = document.getElementById("btn-run-proposals");
+const mitigationGoalSelect = document.getElementById("mitigation-goal-select");
+const mitigationsTableContainer = document.getElementById("mitigations-table-container");
+
+if (btnOpenMitigations && mitigationsModal) {
+  btnOpenMitigations.addEventListener("click", () => {
+    mitigationsModal.style.display = "flex";
+  });
+}
+
+function closeMitigationsModal() {
+  if (mitigationsModal) mitigationsModal.style.display = "none";
+}
+
+if (btnCloseMitigations) btnCloseMitigations.addEventListener("click", closeMitigationsModal);
+if (mitigationsModal) {
+  mitigationsModal.addEventListener("click", (e) => {
+    if (e.target === mitigationsModal) closeMitigationsModal();
+  });
+}
+
+if (btnRunProposals) {
+  btnRunProposals.addEventListener("click", async () => {
+    const goal = mitigationGoalSelect ? mitigationGoalSelect.value : "maximize throughput";
+    if (mitigationsTableContainer) {
+      mitigationsTableContainer.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; text-align: center; padding: 20px;">⚡ Simulating candidates on isolated graph copies...</div>';
+    }
+
+    try {
+      const res = await fetch("/api/mitigations/propose", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ goal: goal }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (mitigationsTableContainer) {
+          mitigationsTableContainer.innerHTML = `<div style="color: #f87171; padding: 10px;">Error: ${escapeHtml(data.error)}</div>`;
+        }
+        return;
+      }
+
+      const cands = data.ranked_candidates || [];
+      if (cands.length === 0) {
+        if (mitigationsTableContainer) {
+          mitigationsTableContainer.innerHTML = '<div style="color: #cbd5e1; padding: 10px;">No valid candidates generated.</div>';
+        }
+        return;
+      }
+
+      let tableHtml = `
+        <table class="benchmark-table" style="width: 100%; font-size: 0.78rem;">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Action</th>
+              <th>Target</th>
+              <th>Value</th>
+              <th>Rationale</th>
+              <th>Measured Impact</th>
+              <th>Apply</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      cands.forEach((c) => {
+        const impact = c.measured_impact;
+        const impactText = `ΔFlow: +${impact.delta_max_flow_mbps} Mbps | ΔLat: ${impact.delta_avg_latency_ms} ms | ΔCut: +${impact.delta_bottleneck_capacity_mbps} Mbps`;
+        const cJson = escapeHtml(JSON.stringify(c));
+
+        tableHtml += `
+          <tr>
+            <td><strong style="color: #34d399;">#${c.rank}</strong></td>
+            <td><code>${escapeHtml(c.action)}</code></td>
+            <td><strong>${escapeHtml(c.target)}</strong></td>
+            <td>${c.proposed_value}</td>
+            <td style="color: #cbd5e1; font-size: 0.72rem;">${escapeHtml(c.rationale)}</td>
+            <td style="color: #93c5fd; font-family: monospace; font-size: 0.72rem;">${escapeHtml(impactText)}</td>
+            <td>
+              <button class="btn btn-primary btn-apply-cand" data-cand='${cJson}' style="background: #10b981; font-size: 0.72rem; padding: 3px 8px;">
+                Apply
+              </button>
+            </td>
+          </tr>
+        `;
+      });
+
+      tableHtml += `</tbody></table>`;
+      if (mitigationsTableContainer) {
+        mitigationsTableContainer.innerHTML = tableHtml;
+
+        // Wire apply buttons
+        const applyBtns = mitigationsTableContainer.querySelectorAll(".btn-apply-cand");
+        applyBtns.forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            const candData = JSON.parse(btn.getAttribute("data-cand"));
+            const confirmed = confirm(
+              `⚠️ DESTRUCTIVE ACTION CONFIRMATION:\n\nApply ${candData.action} on ${candData.target} with value ${candData.proposed_value}?\n\nThis will modify the live network topology.`
+            );
+            if (!confirmed) return;
+
+            btn.disabled = true;
+            btn.textContent = "Applying...";
+            try {
+              const appRes = await fetch("/api/mitigations/apply", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ candidate: candData, confirmed: true }),
+              });
+              const appData = await appRes.json();
+              if (!appRes.ok) {
+                alert(`Error: ${appData.error}`);
+                btn.disabled = false;
+                btn.textContent = "Apply";
+                return;
+              }
+
+              btn.textContent = "Applied ✅";
+              logFault(`Mitigation applied: ${candData.action} on ${candData.target}`, "info");
+              await loadNetwork(false);
+            } catch (err) {
+              alert(`Apply request failed: ${err.message}`);
+              btn.disabled = false;
+              btn.textContent = "Apply";
+            }
+          });
+        });
+      }
+    } catch (err) {
+      if (mitigationsTableContainer) {
+        mitigationsTableContainer.innerHTML = `<div style="color: #f87171; padding: 10px;">Request failed: ${err.message}</div>`;
+      }
+    }
+  });
+}
+
 // Initialize on DOM load
 document.addEventListener("DOMContentLoaded", () => {
   loadNetwork();

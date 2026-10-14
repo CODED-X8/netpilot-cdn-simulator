@@ -64,6 +64,10 @@ class GeneratePostmortemArgs(BaseModel):
     time_window_minutes: int = Field(60, description="Contextual event history time window in minutes.")
 
 
+class ProposeMitigationsArgs(BaseModel):
+    goal: str = Field(..., description="Goal: 'maximize throughput', 'minimize latency', or 'resolve bottleneck'.")
+
+
 TOOL_SCHEMAS: Dict[str, Any] = {
     "shortest_path": ShortestPathArgs,
     "compare_algorithms": CompareAlgorithmsArgs,
@@ -76,6 +80,7 @@ TOOL_SCHEMAS: Dict[str, Any] = {
     "list_nodes": ListNodesArgs,
     "search_history": SearchHistoryArgs,
     "generate_postmortem": GeneratePostmortemArgs,
+    "propose_mitigations": ProposeMitigationsArgs,
 }
 
 
@@ -233,6 +238,20 @@ COPILOT_TOOLS_OPENAI_SPEC: List[Dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "propose_mitigations",
+            "description": "Propose and simulate candidate topology changes (add_edge, increase_capacity, remove_edge) to achieve a network goal (e.g. 'maximize throughput', 'minimize latency', 'resolve bottleneck').",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "goal": {"type": "string", "description": "Performance goal: 'maximize throughput', 'minimize latency', or 'resolve bottleneck'."},
+                },
+                "required": ["goal"],
+            },
+        },
+    },
 ]
 
 
@@ -345,6 +364,12 @@ def execute_tool_call(
                 event_id=validated_args.get("event_id"),
                 session_id=session_id,
                 time_window_minutes=validated_args.get("time_window_minutes", 60),
+            )
+        elif function_name == "propose_mitigations":
+            from services.mitigation_service import propose_and_simulate_mitigations
+            res = propose_and_simulate_mitigations(
+                goal=validated_args["goal"],
+                session_id=session_id,
             )
         else:
             res = {"error": f"Unhandled tool {function_name}"}

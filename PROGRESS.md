@@ -142,5 +142,29 @@ This document tracks the progress of each milestone in the Mini CDN Routing Simu
   - Start `python dashboard/app.py`, open `http://localhost:5000`, click "⚡ Kill Random Edge", then click "📋 Generate Incident Postmortem" to inspect the synthesized report and click "⬇️ Download .md".
 - **Known issues:** None.
 
+---
 
-
+## Milestone M7: Propose, Simulate, Verify Mitigations
+- **Status:** Complete (Tag: `m7`)
+- **What was done:**
+  - `services/mitigation_service.py`:
+    - Candidate Generation: supports LLM-proposed and rule-based fallback candidate topology changes (adding redundant edges, upgrading bottleneck capacities, removing congested routes).
+    - Simulation on Isolated Graph Copies: all candidate actions (`add_edge`, `increase_capacity`, `remove_edge`) are evaluated on cloned graph copies (`graph.clone()`), leaving the active live graph 100% untouched.
+    - Safety & Validation: invalid candidates (missing nodes, non-positive capacities, unsupported operations) are safely discarded with explicit reasons recorded.
+    - Deterministic Ranking: candidates are ranked strictly by measured empirical metric deltas (delta max flow, delta average latency, delta min-cut bottleneck capacity) rather than textual LLM rationale.
+    - Safe Application Gate: applying an action to the live active network requires explicit user confirmation (`confirmed=True`), and all changes are logged to the SQLite event store.
+  - `copilot/tools.py`: Added tool `propose_mitigations` with Pydantic schema `ProposeMitigationsArgs`.
+  - `copilot/llm_provider.py`: Wired `propose_mitigations` handling and query trigger in `FakeLLMProvider`.
+  - `dashboard/app.py`: Added `POST /api/mitigations/propose` and `POST /api/mitigations/apply` REST endpoints.
+  - `dashboard/templates/index.html` & `dashboard/static/js/app.js`:
+    - Added "💡 Mitigations" button in navigation bar.
+    - Added interactive Mitigations Modal with goal selector ("Maximize Throughput", "Minimize Latency", "Resolve Bottleneck").
+    - Added simulation results table displaying Rank, Action, Target, Proposed Value, Rationale, and Measured Impact (delta flow, latency, and bottleneck capacity).
+    - Added "Apply Mitigation" action button with confirmation dialog.
+  - `graph/network.py`: Added `.edges` property and `.copy()` method alias to `Graph` class.
+  - `tests/test_mitigations.py`: 6 tests verifying simulation copy isolation, deterministic ranking, invalid candidate filtering, confirmation gates, API endpoints, and Copilot agent tool integration.
+  - Test suite: **61 passing tests** (original 20 untouched + 41 new).
+- **How to verify:**
+  - Run `pytest -v tests/test_mitigations.py tests/`
+  - Start `python dashboard/app.py`, open `http://localhost:5000`, click "💡 Mitigations" in navbar, select "Maximize Throughput", click "Simulate Mitigations", and inspect ranked proposals.
+- **Known issues:** None.

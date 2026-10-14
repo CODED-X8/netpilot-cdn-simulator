@@ -531,6 +531,43 @@ def generate_postmortem_api():
         return jsonify({"error": f"Postmortem generation failed: {str(e)}"}), 500
 
 
+@app.route("/api/mitigations/propose", methods=["POST"])
+def propose_mitigations_api():
+    """Propose, simulate on copies, and rank candidate mitigations."""
+    session_id = _get_session_id()
+    data = request.get_json(silent=True) or {}
+    goal = data.get("goal", "maximize throughput")
+
+    try:
+        from services.mitigation_service import propose_and_simulate_mitigations
+        result = propose_and_simulate_mitigations(goal=goal, session_id=session_id)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": f"Mitigation proposal failed: {str(e)}"}), 500
+
+
+@app.route("/api/mitigations/apply", methods=["POST"])
+def apply_mitigation_api():
+    """Apply a confirmed mitigation to the live graph."""
+    session_id = _get_session_id()
+    data = request.get_json(silent=True) or {}
+    candidate = data.get("candidate", {})
+    confirmed = data.get("confirmed", False)
+
+    try:
+        from services.mitigation_service import apply_mitigation
+        result = apply_mitigation(candidate=candidate, session_id=session_id, confirmed=confirmed)
+        if result.get("status") == "confirmation_required":
+            return jsonify(result), 200
+
+        # Include updated vis network
+        graph = net_service.get_active_graph(session_id)
+        result["network"] = format_graph_for_vis(graph)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": f"Applying mitigation failed: {str(e)}"}), 500
+
+
 @app.route("/api/benchmark-data", methods=["GET"])
 def get_benchmark_data():
     """Read and return generated empirical benchmarking data."""
