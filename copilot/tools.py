@@ -53,6 +53,12 @@ class ListNodesArgs(BaseModel):
     node_type: Optional[Literal["origin", "edge_server", "user_region", "transit"]] = Field(None, description="Optional filter by node type.")
 
 
+class SearchHistoryArgs(BaseModel):
+    query: str = Field(..., description="Query string to search past events and operational runbooks.")
+    doc_type: Optional[Literal["event", "runbook"]] = Field(None, description="Optional document type filter: 'event' or 'runbook'.")
+    limit: int = Field(3, description="Maximum number of relevant context chunks to retrieve.")
+
+
 TOOL_SCHEMAS: Dict[str, Any] = {
     "shortest_path": ShortestPathArgs,
     "compare_algorithms": CompareAlgorithmsArgs,
@@ -63,6 +69,7 @@ TOOL_SCHEMAS: Dict[str, Any] = {
     "find_bottleneck": FindBottleneckArgs,
     "get_metrics": GetMetricsArgs,
     "list_nodes": ListNodesArgs,
+    "search_history": SearchHistoryArgs,
 }
 
 
@@ -190,6 +197,22 @@ COPILOT_TOOLS_OPENAI_SPEC: List[Dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_history",
+            "description": "Search past network events and incident runbooks (link failure, congestion, regional outage, latency regression, bad topology upload) using semantic vector retrieval.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query describing incident, symptoms, or mitigation procedures"},
+                    "doc_type": {"type": "string", "enum": ["event", "runbook"], "description": "Optional filter for events or runbooks"},
+                    "limit": {"type": "integer", "default": 3, "description": "Maximum number of relevant chunks to retrieve"},
+                },
+                "required": ["query"],
+            },
+        },
+    },
 ]
 
 
@@ -272,6 +295,30 @@ def execute_tool_call(
             )
         elif function_name == "reset_network":
             res = net_service.reset_network(session_id=session_id)
+        elif function_name == "search_history":
+            from rag.vector_store import get_vector_store
+            vs = get_vector_store()
+            vs.sync_events(limit=25)
+            hits = vs.search(
+                query=validated_args["query"],
+                doc_type=validated_args.get("doc_type"),
+                limit=validated_args.get("limit", 3),
+            )
+            res = {
+                "query": validated_args["query"],
+                "results_count": len(hits),
+                "retrieved_context": [
+                    {
+                        "id": h["id"],
+                        "doc_type": h["doc_type"],
+                        "title": h["title"],
+                        "chunk_path": h["chunk_path"],
+                        "similarity": h["similarity"],
+                        "content": h["content"],
+                    }
+                    for h in hits
+                ],
+            }
         else:
             res = {"error": f"Unhandled tool {function_name}"}
 

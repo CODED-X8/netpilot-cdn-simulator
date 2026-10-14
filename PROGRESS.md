@@ -95,3 +95,27 @@ This document tracks the progress of each milestone in the Mini CDN Routing Simu
   - Inspect `.env.example`, `Dockerfile`, and `docker-compose.yml`.
 - **Known issues:** None.
 
+---
+
+## Milestone M5: RAG Over History and Runbooks
+- **Status:** Complete (Tag: `m5`)
+- **What was done:**
+  - `rag/embedder.py`: Configured embedding provider supporting `EMBED_MODEL` (e.g. `text-embedding-3-small` via standard library `urllib.request`) and a `DeterministicFakeEmbedder` that produces normalized vectors with semantic cluster weighting for reliable offline execution and unit testing.
+  - `rag/vector_store.py`: In-memory and SQLite-backed vector store using table `documents(id, doc_type, title, content, chunk_path, embedding_json)` with pure Python cosine similarity (zero external vector database dependency).
+  - `runbooks/`: 5 operational runbooks chunked by Markdown headings with explicit chunk paths:
+    - `link_failure_runbook.md` (Isolating severed links, rerouting traffic, verifying latency)
+    - `congestion_runbook.md` (Detecting saturated links, min-cut analysis, traffic throttling)
+    - `regional_outage_runbook.md` (Cascading POP failures, regional failover, user rehoming)
+    - `latency_regression_runbook.md` (Diagnosing multi-hop detours, algorithm cross-verification)
+    - `bad_topology_upload_runbook.md` (Identifying broken uploads, rollback to baseline CDN)
+  - `copilot/tools.py`: Added tool `search_history` with Pydantic validation schema `SearchHistoryArgs` to retrieve relevant runbooks and recent synced events.
+  - `copilot/agent.py`: Wrapped retrieved chunks in strict isolation delimiters (`=== RETRIEVED CONTEXT === ... === END RETRIEVED CONTEXT ===`) and added prompt instructions to prevent prompt injection and system prompt leaks.
+  - `copilot/verifier.py`: Added `verify_event_id_grounding` to detect fabricated event ID citations and flag them with verification warnings.
+  - `tests/test_rag.py`: 5 tests covering fake embedder normalization, runbook chunking & retrieval, event sync, prompt injection delimiter isolation, and event citation verification.
+  - Test suite: **51 passing tests** (original 20 untouched + 31 new).
+- **How to verify:**
+  - Run `pytest -v tests/test_rag.py tests/`
+  - Start `python dashboard/app.py`, open `http://localhost:5000`, open Copilot drawer, and ask "What is the runbook procedure for link failure?"
+- **Known issues:** None.
+
+

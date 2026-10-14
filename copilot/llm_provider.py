@@ -171,10 +171,17 @@ class FakeLLMProvider(BaseLLMProvider):
         # If last message was a tool result, generate final synthesized explanation
         if last_msg.get("role") == "tool":
             tool_name = last_msg.get("name", "tool")
-            try:
-                tool_data = json.loads(last_msg.get("content", "{}"))
-            except Exception:
-                tool_data = {}
+            raw_content = last_msg.get("content", "{}")
+            if "Metadata: " in raw_content:
+                try:
+                    tool_data = json.loads(raw_content.split("Metadata: ", 1)[1])
+                except Exception:
+                    tool_data = {}
+            else:
+                try:
+                    tool_data = json.loads(raw_content)
+                except Exception:
+                    tool_data = {}
 
             if tool_name == "what_if":
                 before_lat = tool_data.get("before", {}).get("latency", 0.0)
@@ -209,6 +216,17 @@ class FakeLLMProvider(BaseLLMProvider):
                 edges = tool_data.get("edge_count", 0)
                 lat = tool_data.get("average_latency_ms", 0.0)
                 content = f"Tool get_metrics reports {nodes} nodes and {edges} edges with average latency {lat} ms."
+            elif tool_name == "search_history":
+                count = tool_data.get("count", tool_data.get("results_count", 0))
+                chunks = tool_data.get("retrieved_context", [])
+                top_chunk = chunks[0] if chunks else {}
+                title = top_chunk.get("title", "Runbook")
+                path = top_chunk.get("chunk_path", "runbook.md")
+                content = (
+                    f"Tool search_history retrieved {count} relevant runbook sections. "
+                    f"According to standard operational procedures in '{path}' ({title}): "
+                    f"Inspect the network status, assess latency impact, and execute verified actions."
+                )
             else:
                 content = f"Tool {tool_name} executed successfully. Facts verified: {json.dumps(tool_data)}."
 
@@ -271,6 +289,12 @@ class FakeLLMProvider(BaseLLMProvider):
                 tool_calls=[LLMToolCall("call_reset", "reset_network", {"confirmed": False})],
                 prompt_tokens=150,
                 completion_tokens=20,
+            )
+        elif "runbook" in user_text or "procedure" in user_text or "sop" in user_text or "how do i" in user_text or "history" in user_text:
+            return LLMResponse(
+                tool_calls=[LLMToolCall("call_search", "search_history", {"query": user_text, "limit": 3})],
+                prompt_tokens=170,
+                completion_tokens=25,
             )
         else:
             # Default to shortest_path for user_1
