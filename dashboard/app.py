@@ -22,6 +22,12 @@ import services.topology_service as topo_service
 from services.topology_service import TopologyValidationError
 from storage.event_store import get_event_store
 from copilot.agent import run_copilot_chat
+from copilot.guardrails import (
+    is_copilot_enabled,
+    check_rate_limit,
+    check_daily_token_budget,
+    record_tokens_consumed,
+)
 
 app = Flask(__name__)
 
@@ -457,8 +463,32 @@ def load_sample_topology_api():
 
 @app.route("/api/copilot/chat", methods=["POST"])
 def copilot_chat_api():
-    """Chat endpoint for NetPilot AI Copilot."""
+    """Chat endpoint for NetPilot AI Copilot with guardrails (kill switch, rate limit, token budget)."""
+    # 1. Global kill switch check
+    if not is_copilot_enabled():
+        return jsonify({
+            "error": "NetPilot Copilot has been administratively disabled via COPILOT_ENABLED."
+        }), 503
+
     session_id = _get_session_id()
+
+    # 2. Per-session rate limiter check
+    allowed, retry_after = check_rate_limit(session_id)
+    if not allowed:
+        resp = jsonify({
+            "error": f"Rate limit exceeded. Try again in {retry_after} seconds."
+        })
+        resp.status_code = 429
+        resp.headers["Retry-After"] = str(retry_after)
+        return resp
+
+    # 3. Daily token budget check
+    budget_ok, used, budget = check_daily_token_budget()
+    if not budget_ok:
+        return jsonify({
+            "error": f"Daily token budget exhausted ({used}/{budget} tokens used). Resets at midnight UTC."
+        }), 429
+
     data = request.get_json(silent=True) or {}
     message = data.get("message", "").strip()
     history = data.get("history", [])
@@ -474,6 +504,8 @@ def copilot_chat_api():
             history=history,
             confirm_action=confirm_action,
         )
+        # Record tokens consumed today
+        record_tokens_consumed(response_data.get("tokens", 0))
         return jsonify(response_data)
     except Exception as e:
         return jsonify({"error": f"Copilot error: {str(e)}"}), 500

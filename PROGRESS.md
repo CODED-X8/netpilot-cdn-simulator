@@ -72,3 +72,26 @@ This document tracks the progress of each milestone in the Mini CDN Routing Simu
   - Run `pytest -v tests/test_copilot.py tests/`
   - Start `python dashboard/app.py`, open `http://localhost:5000`, click "🤖 NetPilot Copilot", click quick prompt chips or ask natural language queries.
 - **Known issues:** None.
+
+---
+
+## Milestone M4: Deployment Baseline & Guardrails
+- **Status:** Complete (Tag: `m4`)
+- **What was done:**
+  - `Dockerfile`: Multi-stage build with `python:3.12-slim`, non-root system user (`cdnapp`), minimal dependencies, and built-in health check polling `http://localhost:5000/api/network`.
+  - `docker-compose.yml`: Configured single-command deployment with volume persistence for the SQLite event store (`network_events.db`).
+  - `.env.example`: Fully documented environment variables for `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`, `EMBED_MODEL`, `COPILOT_ENABLED`, `RATE_LIMIT_PER_MINUTE`, and `DAILY_TOKEN_BUDGET`.
+  - `.github/workflows/ci.yml`: GitHub Actions automated CI testing workflow running on push/PR for Python 3.12.
+  - `copilot/guardrails.py`:
+    - Sliding 60-second window rate limiter (default 10 req/min per session, returns 429 with `Retry-After`).
+    - UTC calendar-day token budget tracker (default 100,000 tokens, returns 429 upon exhaustion).
+    - Administrative kill switch (`COPILOT_ENABLED=false` returning 503 while preserving normal routing operations).
+  - `dashboard/app.py`: Integrated guardrails into `POST /api/copilot/chat`.
+  - `README.md`: Added comprehensive Deployment section covering local Docker run, Docker Compose, Render, Fly.io, and Hugging Face Spaces.
+  - `tests/test_deployment_and_limits.py`: 4 tests for rate limiting, token budget enforcement, kill switch, and HTTP 429/503 headers.
+  - Test suite: **46 passing tests** (original 20 untouched + 26 new).
+- **How to verify:**
+  - Run `pytest -v tests/test_deployment_and_limits.py tests/`
+  - Inspect `.env.example`, `Dockerfile`, and `docker-compose.yml`.
+- **Known issues:** None.
+

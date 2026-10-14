@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mini-cdn-simulator:latest
+    container_name: cdn_simulator_app
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=production
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_BASE_URL=${LLM_BASE_URL:-https://api.openai.com/v1}
+      - LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
+      - EMBED_MODEL=${EMBED_MODEL:-text-embedding-3-small}
+      - COPILOT_ENABLED=${COPILOT_ENABLED:-true}
+      - RATE_LIMIT_PER_MINUTE=${RATE_LIMIT_PER_MINUTE:-10}
+      - DAILY_TOKEN_BUDGET=${DAILY_TOKEN_BUDGET:-100000}
+    volumes:
+      - cdn_data:/app/data
+      - ./network_events.db:/app/network_events.db
+
+volumes:
+  cdn_data:
+    driver: local

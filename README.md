@@ -88,7 +88,7 @@ Clone or navigate to the repository directory and create a virtual environment:
 
 ```bash
 # Navigate to project root
-cd /home/coded-x/Desktop/DAA_PROJ
+cd DAA_PROJ
 
 # Create Python virtual environment
 python3 -m venv .venv
@@ -168,7 +168,95 @@ http://localhost:5000
 
 ---
 
-## 🎯 Review 1 Presentation Guide (Key Talking Points)
+## 🐳 Deployment & Production Setup
+
+The Mini CDN Routing Simulator and NetPilot Copilot are packaged as a production-ready, non-root, multi-stage Docker container with automated health checks, configurable guardrails, and persistent volume support.
+
+### 1. Environment Configuration
+
+Copy `.env.example` to `.env` and configure your API credentials and rate limits:
+
+```bash
+cp .env.example .env
+```
+
+Key variables:
+- `LLM_API_KEY`: API key for OpenAI-compatible model (leave empty to run the simulator without AI copilot).
+- `LLM_BASE_URL`: API base URL (defaults to `https://api.openai.com/v1`, or local Ollama / vLLM).
+- `LLM_MODEL`: Target model (defaults to `gpt-4o-mini`).
+- `COPILOT_ENABLED`: Global kill switch (`true` or `false`). When `false`, copilot returns `503 Service Unavailable` while all routing engines operate normally.
+- `RATE_LIMIT_PER_MINUTE`: Maximum copilot queries per session per minute (default `10`, returns `429`).
+- `DAILY_TOKEN_BUDGET`: Cumulative daily token ceiling (default `100,000`, returns `429` on exhaustion).
+
+---
+
+### 2. Local Docker Run
+
+Build the multi-stage image and run as a non-root user:
+
+```bash
+# Build the image
+docker build -t mini-cdn-simulator:latest .
+
+# Run with environment variables and healthcheck
+docker run -d \
+  --name cdn_simulator \
+  -p 5000:5000 \
+  --env-file .env \
+  mini-cdn-simulator:latest
+
+# Check container health status
+docker inspect --format='{{json .State.Health.Status}}' cdn_simulator
+```
+
+---
+
+### 3. Docker Compose (Recommended)
+
+Run the full stack with mounted persistent volume for the SQLite event store:
+
+```bash
+docker compose up -d --build
+```
+
+Access the dashboard at `http://localhost:5000`. To stop the service:
+
+```bash
+docker compose down
+```
+
+---
+
+### 4. Free-Tier Cloud Deployments
+
+#### A. Render (Web Service)
+1. Fork or push this repository to GitHub.
+2. In the [Render Dashboard](https://dashboard.render.com), create a new **Web Service**.
+3. Select your repository and choose **Docker** as the Environment.
+4. Set the Health Check Path to `/api/network`.
+5. Under **Environment Variables**, add `LLM_API_KEY`, `LLM_MODEL`, and other desired variables.
+6. Click **Create Web Service**.
+
+#### B. Fly.io
+1. Install `flyctl` and authenticate (`fly auth login`).
+2. Run `fly launch` in the repository root. It will automatically detect `Dockerfile` and configure port `5000`.
+3. Set your secrets:
+   ```bash
+   fly secrets set LLM_API_KEY="your-key-here" COPILOT_ENABLED="true"
+   ```
+4. Deploy:
+   ```bash
+   fly deploy
+   ```
+
+#### C. Hugging Face Spaces
+1. Create a new Space on [Hugging Face](https://huggingface.co/spaces) and select the **Docker** SDK.
+2. In the Space repository settings, set Repository Secrets for `LLM_API_KEY`.
+3. Push the repository to the Space git remote. Port `5000` is exposed and served automatically.
+
+---
+
+## 🎯 Review Presentation Guide (Key Talking Points)
 
 1. **Academic Rigor**: Emphasize that all algorithms were written from scratch with no third-party routing libraries used.
 2. **Cross-Validation**: Explain how `test_handcrafted.py` verifies mathematical ground truth, while `test_cross_validation.py` asserts algorithm equivalence across randomized topologies.
