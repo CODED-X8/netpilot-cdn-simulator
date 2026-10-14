@@ -20,6 +20,9 @@
     <div class="nav-actions">
       <span class="badge badge-topo" id="active-topo-name">Topology: Sample Hierarchical CDN</span>
       <span class="badge badge-info" id="topo-stats">20 Nodes | -- Links</span>
+      <button id="btn-open-upload" class="btn btn-secondary">
+        📁 Load Topology
+      </button>
       <button id="btn-open-benchmark" class="btn btn-benchmark">
         📊 Benchmark Analytics
       </button>
@@ -416,6 +419,59 @@
               </ul>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Topology Upload & Samples Modal -->
+  <div id="upload-modal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 650px;">
+      <div class="modal-header">
+        <h2>📁 Load or Upload Network Topology</h2>
+        <button id="btn-close-upload-modal" class="btn-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- Preset Sample Topologies -->
+        <div class="panel" style="margin-bottom: 14px;">
+          <h3 class="panel-title">Prebuilt Verified Topologies</h3>
+          <p class="panel-hint">Select a sample network layout to load instantly:</p>
+          <div style="display: flex; gap: 8px; margin-top: 6px;">
+            <button id="btn-load-campus" class="btn btn-secondary">🎓 Campus Network</button>
+            <button id="btn-load-cloud" class="btn btn-secondary">☁️ Multi-Region Cloud</button>
+            <button id="btn-load-cdn" class="btn btn-secondary">🌐 Default 20-Node CDN</button>
+          </div>
+        </div>
+
+        <!-- Custom Upload -->
+        <div class="panel">
+          <h3 class="panel-title">Custom Topology Upload</h3>
+          <p class="panel-hint">Upload a custom network as JSON or two CSV files (nodes.csv + edges.csv):</p>
+          
+          <div style="margin: 10px 0;">
+            <label class="tele-label">Upload JSON file:</label>
+            <input type="file" id="upload-json-file" accept=".json" class="dropdown" style="margin-top: 4px;" />
+          </div>
+
+          <div style="margin: 12px 0; border-top: 1px dashed var(--border); padding-top: 10px;">
+            <label class="tele-label">Or upload two CSV files:</label>
+            <div style="display: flex; gap: 10px; margin-top: 4px;">
+              <input type="file" id="upload-nodes-file" accept=".csv" class="dropdown" placeholder="nodes.csv" />
+              <input type="file" id="upload-edges-file" accept=".csv" class="dropdown" placeholder="edges.csv" />
+            </div>
+          </div>
+
+          <div style="margin-top: 12px; display: flex; gap: 8px;">
+            <button id="btn-submit-upload" class="btn btn-primary" style="flex: 2;">
+              🚀 Validate & Apply Topology
+            </button>
+            <a href="/api/topology/template?format=json" download class="btn btn-secondary" style="text-align: center; text-decoration: none;">
+              📥 JSON Template
+            </a>
+          </div>
+
+          <!-- Upload Status & Errors -->
+          <div id="upload-status-box" style="margin-top: 10px; display: none;"></div>
         </div>
       </div>
     </div>

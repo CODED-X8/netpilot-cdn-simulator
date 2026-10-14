@@ -1,0 +1,30 @@
+{
+  "name": "Multi-Region Cloud Topology",
+  "description": "Global multi-cloud interconnect with central origin, distributed regional edge caches, inter-region peering, and regional client populations.",
+  "nodes": [
+    {"id": "origin_us_east", "name": "Primary Cloud DC (Virginia)", "type": "origin"},
+    {"id": "edge_us_west", "name": "Edge POP (Oregon)", "type": "edge_server"},
+    {"id": "edge_eu_west", "name": "Edge POP (Frankfurt)", "type": "edge_server"},
+    {"id": "edge_ap_east", "name": "Edge POP (Tokyo)", "type": "edge_server"},
+    {"id": "edge_sa_east", "name": "Edge POP (São Paulo)", "type": "edge_server"},
+    {"id": "transit_transatlantic", "name": "Transatlantic Subsea Cable", "type": "transit"},
+    {"id": "transit_transpacific", "name": "Transpacific Cable Relay", "type": "transit"},
+    {"id": "users_americas", "name": "Clients North America", "type": "user_region"},
+    {"id": "users_europe", "name": "Clients Western Europe", "type": "user_region"},
+    {"id": "users_apac", "name": "Clients East Asia", "type": "user_region"},
+    {"id": "users_latam", "name": "Clients South America", "type": "user_region"}
+  ],
+  "edges": [
+    {"source": "origin_us_east", "target": "transit_transatlantic", "latency_ms": 32.0, "capacity_mbps": 10000, "directed": false},
+    {"source": "origin_us_east", "target": "transit_transpacific", "latency_ms": 45.0, "capacity_mbps": 10000, "directed": false},
+    {"source": "origin_us_east", "target": "edge_us_west", "latency_ms": 28.0, "capacity_mbps": 8000, "directed": false},
+    {"source": "transit_transatlantic", "target": "edge_eu_west", "latency_ms": 38.0, "capacity_mbps": 10000, "directed": false},
+    {"source": "transit_transpacific", "target": "edge_ap_east", "latency_ms": 52.0, "capacity_mbps": 8000, "directed": false},
+    {"source": "edge_us_west", "target": "edge_sa_east", "latency_ms": 65.0, "capacity_mbps": 5000, "directed": false},
+    {"source": "users_americas", "target": "origin_us_east", "latency_ms": 12.0, "capacity_mbps": 1000, "directed": false},
+    {"source": "users_americas", "target": "edge_us_west", "latency_ms": 18.0, "capacity_mbps": 1000, "directed": false},
+    {"source": "users_europe", "target": "edge_eu_west", "latency_ms": 14.0, "capacity_mbps": 1000, "directed": false},
+    {"source": "users_apac", "target": "edge_ap_east", "latency_ms": 16.0, "capacity_mbps": 1000, "directed": false},
+    {"source": "users_latam", "target": "edge_sa_east", "latency_ms": 22.0, "capacity_mbps": 1000, "directed": false}
+  ]
+}

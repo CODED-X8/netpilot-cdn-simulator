@@ -18,6 +18,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from graph.network import Graph
 import services.network_service as net_service
+import services.topology_service as topo_service
+from services.topology_service import TopologyValidationError
 from storage.event_store import get_event_store
 
 app = Flask(__name__)
@@ -311,6 +313,145 @@ def get_events_api():
     limit = int(request.args.get("limit", 50))
     events = get_event_store().list_events(session_id=session_id, event_type=event_type, limit=limit)
     return jsonify({"events": [e.to_dict() for e in events]})
+
+
+@app.route("/api/topology/upload", methods=["POST"])
+def upload_topology_api():
+    """Upload a network topology from JSON or two CSVs (nodes.csv, edges.csv)."""
+    session_id = _get_session_id()
+    content_type = request.content_type or ""
+
+    try:
+        # 1. JSON payload
+        if "application/json" in content_type:
+            raw_text = request.get_data(as_text=True)
+            graph, top_name, warnings = topo_service.parse_json_topology(raw_text)
+
+        # 2. Multipart form upload
+        elif "multipart/form-data" in content_type:
+            # Check single JSON file
+            if "file" in request.files and request.files["file"].filename:
+                f = request.files["file"]
+                raw_text = f.read().decode("utf-8", errors="replace")
+                graph, top_name, warnings = topo_service.parse_json_topology(raw_text)
+            # Check two CSV files: nodes_file and edges_file
+            elif "nodes_file" in request.files and "edges_file" in request.files:
+                nodes_text = request.files["nodes_file"].read().decode("utf-8", errors="replace")
+                edges_text = request.files["edges_file"].read().decode("utf-8", errors="replace")
+                top_name = request.form.get("name") or "Uploaded CSV Topology"
+                graph, top_name, warnings = topo_service.parse_csv_topology(nodes_text, edges_text, name=top_name)
+            else:
+                return jsonify({
+                    "error": "Upload missing file payload. Provide 'file' (JSON) or 'nodes_file' and 'edges_file' (CSV)."
+                }), 400
+        else:
+            # Fallback raw data
+            raw_text = request.get_data(as_text=True)
+            graph, top_name, warnings = topo_service.parse_json_topology(raw_text)
+
+        # Update active graph for this session
+        net_service.set_active_graph(graph, name=top_name, session_id=session_id)
+
+        # Log event
+        get_event_store().log_event(
+            event_type="topology_upload",
+            session_id=session_id,
+            topology_name=top_name,
+            inputs={"node_count": len(graph), "edge_count": graph.edge_count()},
+            results={"status": "success", "warnings": warnings},
+        )
+
+        return jsonify({
+            "status": "success",
+            "message": f"Topology '{top_name}' successfully loaded.",
+            "topology_name": top_name,
+            "node_count": len(graph),
+            "edge_count": graph.edge_count(),
+            "warnings": warnings,
+            "network": format_graph_for_vis(graph),
+        })
+
+    except TopologyValidationError as tve:
+        return jsonify({
+            "error": "Topology validation failed",
+            "errors": tve.errors,
+            "warnings": tve.warnings,
+        }), 400
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@app.route("/api/topology/template", methods=["GET"])
+def get_topology_template_api():
+    """Download starter topology template (JSON or CSV)."""
+    fmt = request.args.get("format", "json")
+    tmpl = topo_service.get_template_files(fmt)
+    return tmpl["content"], 200, {
+        "Content-Type": tmpl["mimetype"],
+        "Content-Disposition": f"attachment; filename={tmpl['filename']}",
+    }
+
+
+@app.route("/api/topology/samples", methods=["GET"])
+def get_sample_topologies_api():
+    """List available sample topologies."""
+    samples_dir = os.path.join(os.path.dirname(__file__), "..", "samples")
+    sample_files = []
+    if os.path.exists(samples_dir):
+        for fname in os.listdir(samples_dir):
+            if fname.endswith(".json"):
+                fpath = os.path.join(samples_dir, fname)
+                try:
+                    with open(fpath, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        sample_files.append({
+                            "id": fname,
+                            "name": data.get("name", fname),
+                            "description": data.get("description", ""),
+                            "node_count": len(data.get("nodes", [])),
+                            "edge_count": len(data.get("edges", [])),
+                        })
+                except Exception:
+                    pass
+    return jsonify({"samples": sample_files})
+
+
+@app.route("/api/topology/load-sample", methods=["POST"])
+def load_sample_topology_api():
+    """Load a prebuilt sample topology into current session."""
+    session_id = _get_session_id()
+    data = request.get_json() or {}
+    sample_id = data.get("sample_id", "campus_network.json")
+
+    samples_dir = os.path.join(os.path.dirname(__file__), "..", "samples")
+    target_path = os.path.join(samples_dir, os.path.basename(sample_id))
+
+    if not os.path.exists(target_path):
+        return jsonify({"error": f"Sample topology '{sample_id}' not found."}), 404
+
+    try:
+        with open(target_path, "r", encoding="utf-8") as f:
+            raw_text = f.read()
+        graph, top_name, warnings = topo_service.parse_json_topology(raw_text)
+        net_service.set_active_graph(graph, name=top_name, session_id=session_id)
+
+        get_event_store().log_event(
+            event_type="topology_upload",
+            session_id=session_id,
+            topology_name=top_name,
+            inputs={"sample_id": sample_id},
+            results={"status": "success"},
+        )
+
+        return jsonify({
+            "status": "success",
+            "message": f"Sample topology '{top_name}' loaded.",
+            "topology_name": top_name,
+            "warnings": warnings,
+            "network": format_graph_for_vis(graph),
+        })
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 400
 
 
 @app.route("/api/benchmark-data", methods=["GET"])

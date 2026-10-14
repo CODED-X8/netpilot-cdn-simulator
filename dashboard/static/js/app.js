@@ -685,6 +685,133 @@ benchmarkModal.addEventListener("click", (e) => {
   }
 });
 
+// Topology Upload & Sample Modal
+const btnOpenUpload = document.getElementById("btn-open-upload");
+const btnCloseUploadModal = document.getElementById("btn-close-upload-modal");
+const uploadModal = document.getElementById("upload-modal");
+const btnLoadCampus = document.getElementById("btn-load-campus");
+const btnLoadCloud = document.getElementById("btn-load-cloud");
+const btnLoadCdn = document.getElementById("btn-load-cdn");
+const uploadJsonFile = document.getElementById("upload-json-file");
+const uploadNodesFile = document.getElementById("upload-nodes-file");
+const uploadEdgesFile = document.getElementById("upload-edges-file");
+const btnSubmitUpload = document.getElementById("btn-submit-upload");
+const uploadStatusBox = document.getElementById("upload-status-box");
+
+if (btnOpenUpload) {
+  btnOpenUpload.addEventListener("click", () => {
+    uploadModal.style.display = "flex";
+    uploadStatusBox.style.display = "none";
+  });
+}
+
+if (btnCloseUploadModal) {
+  btnCloseUploadModal.addEventListener("click", () => {
+    uploadModal.style.display = "none";
+  });
+}
+
+if (uploadModal) {
+  uploadModal.addEventListener("click", (e) => {
+    if (e.target === uploadModal) {
+      uploadModal.style.display = "none";
+    }
+  });
+}
+
+async function loadSampleTopology(sampleId) {
+  try {
+    const res = await fetch("/api/topology/load-sample", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sample_id: sampleId }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(`Error loading sample: ${data.error}`);
+      return;
+    }
+    uploadModal.style.display = "none";
+    logFault(`Loaded topology: ${data.topology_name}`, "info");
+    await loadNetwork(false);
+  } catch (err) {
+    console.error("Failed to load sample:", err);
+  }
+}
+
+if (btnLoadCampus) {
+  btnLoadCampus.addEventListener("click", () => loadSampleTopology("campus_network.json"));
+}
+if (btnLoadCloud) {
+  btnLoadCloud.addEventListener("click", () => loadSampleTopology("multi_region_cloud.json"));
+}
+if (btnLoadCdn) {
+  btnLoadCdn.addEventListener("click", async () => {
+    await fetch("/api/network/reset", { method: "POST" });
+    uploadModal.style.display = "none";
+    logFault("Reset to default 20-node CDN topology", "info");
+    await loadNetwork(false);
+  });
+}
+
+if (btnSubmitUpload) {
+  btnSubmitUpload.addEventListener("click", async () => {
+    uploadStatusBox.style.display = "block";
+    uploadStatusBox.innerHTML = '<span class="text-muted">Uploading and validating topology...</span>';
+
+    const formData = new FormData();
+
+    if (uploadJsonFile && uploadJsonFile.files.length > 0) {
+      formData.append("file", uploadJsonFile.files[0]);
+    } else if (
+      uploadNodesFile &&
+      uploadNodesFile.files.length > 0 &&
+      uploadEdgesFile &&
+      uploadEdgesFile.files.length > 0
+    ) {
+      formData.append("nodes_file", uploadNodesFile.files[0]);
+      formData.append("edges_file", uploadEdgesFile.files[0]);
+      formData.append("name", "Custom CSV Network");
+    } else {
+      uploadStatusBox.innerHTML =
+        '<span style="color: #f87171;">Please select either a JSON file OR both nodes.csv and edges.csv files.</span>';
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/topology/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        let errHtml = `<strong style="color: #f87171;">Validation Failed:</strong><ul style="color: #fca5a5; padding-left: 18px; margin-top: 4px; font-size: 0.78rem;">`;
+        if (data.errors && data.errors.length > 0) {
+          data.errors.forEach((e) => {
+            errHtml += `<li>${e}</li>`;
+          });
+        } else {
+          errHtml += `<li>${data.error || "Unknown validation error"}</li>`;
+        }
+        errHtml += "</ul>";
+        uploadStatusBox.innerHTML = errHtml;
+        return;
+      }
+
+      uploadStatusBox.innerHTML = `<span style="color: #34d399;">Success! Loaded "${data.topology_name}" with ${data.node_count} nodes and ${data.edge_count} edges.</span>`;
+      setTimeout(async () => {
+        uploadModal.style.display = "none";
+        logFault(`Applied custom topology: ${data.topology_name}`, "info");
+        await loadNetwork(false);
+      }, 700);
+    } catch (err) {
+      uploadStatusBox.innerHTML = `<span style="color: #f87171;">Upload request failed: ${err.message}</span>`;
+    }
+  });
+}
+
 // Initialize on DOM load
 document.addEventListener("DOMContentLoaded", () => {
   loadNetwork();

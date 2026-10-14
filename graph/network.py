@@ -12,7 +12,7 @@ import copy
 class Node:
     """Represents a network node in the CDN topology."""
 
-    VALID_TYPES = {"origin", "edge_server", "user_region"}
+    VALID_TYPES = {"origin", "edge_server", "user_region", "transit"}
 
     def __init__(
         self,

@@ -1,0 +1,23 @@
+{
+  "name": "University Campus Network",
+  "description": "Enterprise campus network with central datacenter, divisional POPs, optical transit, and residence halls.",
+  "nodes": [
+    {"id": "dc_core", "name": "Main Campus Datacenter", "type": "origin"},
+    {"id": "edge_eng", "name": "Engineering POP", "type": "edge_server"},
+    {"id": "edge_sci", "name": "Sciences POP", "type": "edge_server"},
+    {"id": "transit_optical", "name": "Campus Optical Core", "type": "transit"},
+    {"id": "dorm_north", "name": "North Residence Halls", "type": "user_region"},
+    {"id": "dorm_south", "name": "South Residence Halls", "type": "user_region"},
+    {"id": "library_users", "name": "Central Library Users", "type": "user_region"}
+  ],
+  "edges": [
+    {"source": "dc_core", "target": "transit_optical", "latency_ms": 1.2, "capacity_mbps": 10000, "directed": false},
+    {"source": "transit_optical", "target": "edge_eng", "latency_ms": 1.8, "capacity_mbps": 5000, "directed": false},
+    {"source": "transit_optical", "target": "edge_sci", "latency_ms": 2.1, "capacity_mbps": 5000, "directed": false},
+    {"source": "edge_eng", "target": "edge_sci", "latency_ms": 1.5, "capacity_mbps": 2000, "directed": false},
+    {"source": "dorm_north", "target": "edge_eng", "latency_ms": 4.2, "capacity_mbps": 1000, "directed": false},
+    {"source": "dorm_south", "target": "edge_sci", "latency_ms": 4.8, "capacity_mbps": 1000, "directed": false},
+    {"source": "library_users", "target": "edge_eng", "latency_ms": 3.0, "capacity_mbps": 1000, "directed": false},
+    {"source": "library_users", "target": "edge_sci", "latency_ms": 3.2, "capacity_mbps": 1000, "directed": false}
+  ]
+}
