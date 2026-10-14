@@ -13,6 +13,31 @@ import urllib.error
 from typing import Dict, List, Optional, Any, Tuple
 
 
+def load_dotenv(env_path: Optional[str] = None) -> None:
+    """Load key-value pairs from .env into os.environ if not already present."""
+    if env_path is None:
+        env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".env"))
+    if not os.path.exists(env_path):
+        return
+    try:
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                k = k.strip()
+                v = v.strip().strip("'\"")
+                if k and k not in os.environ:
+                    os.environ[k] = v
+    except Exception:
+        pass
+
+
+# Auto-load .env on module import
+load_dotenv()
+
+
 class LLMToolCall:
     """Represents a structured function call request from the model."""
 
@@ -366,16 +391,19 @@ def get_llm_provider(force_fake: bool = False, fake_steps: Optional[List[Any]] =
     is_groq = bool(groq_key) or api_key.startswith("gsk_") or os.environ.get("LLM_PROVIDER", "").lower() == "groq"
 
     if is_groq:
+        # For Groq, always use Groq base URL unless GROQ_BASE_URL is explicitly set
         base_url = (
             os.environ.get("GROQ_BASE_URL", "").strip()
-            or os.environ.get("LLM_BASE_URL", "").strip()
             or "https://api.groq.com/openai/v1"
         )
-        model = (
-            os.environ.get("GROQ_MODEL", "").strip()
-            or os.environ.get("LLM_MODEL", "").strip()
-            or "llama-3.3-70b-versatile"
-        )
+        groq_model = os.environ.get("GROQ_MODEL", "").strip()
+        llm_model = os.environ.get("LLM_MODEL", "").strip()
+        if groq_model:
+            model = groq_model
+        elif llm_model and not llm_model.startswith("gpt-"):
+            model = llm_model
+        else:
+            model = "openai/gpt-oss-120b"
     else:
         base_url = os.environ.get("LLM_BASE_URL", "https://api.openai.com/v1").strip()
         model = os.environ.get("LLM_MODEL", "gpt-4o-mini").strip()

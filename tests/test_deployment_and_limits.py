@@ -92,6 +92,7 @@ def test_copilot_chat_rate_limit_endpoint(monkeypatch):
     """Test 429 response on /api/copilot/chat via Flask test client."""
     monkeypatch.setenv("RATE_LIMIT_PER_MINUTE", "2")
     monkeypatch.setenv("COPILOT_ENABLED", "true")
+    monkeypatch.setattr("dashboard.app.run_copilot_chat", lambda **kwargs: {"answer": "mocked response", "tools_used": []})
     client = app.test_client()
 
     headers = {"X-Session-ID": "test_burst_session"}

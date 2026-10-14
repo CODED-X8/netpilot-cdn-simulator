@@ -10,7 +10,7 @@ import services.network_service as net_service
 
 class ShortestPathArgs(BaseModel):
     source: str = Field(..., description="ID of the user region to route from (e.g. 'user_1', 'user_3').")
-    algo: Literal["bellman_ford", "floyd_warshall"] = Field("bellman_ford", description="Shortest path algorithm: 'bellman_ford' or 'floyd_warshall'.")
+    algo: Optional[Literal["bellman_ford", "floyd_warshall"]] = Field("bellman_ford", description="Shortest path algorithm: 'bellman_ford' or 'floyd_warshall'.")
 
 
 class CompareAlgorithmsArgs(BaseModel):
@@ -21,11 +21,11 @@ class KillEdgeArgs(BaseModel):
     edge_id: Optional[str] = Field(None, description="Identifier of the link to sever, e.g. 'user_1<->edge_1'.")
     u: Optional[str] = Field(None, description="Source node of the edge.")
     v: Optional[str] = Field(None, description="Target node of the edge.")
-    confirmed: bool = Field(False, description="Whether the user has explicitly confirmed this destructive failure.")
+    confirmed: Optional[bool] = Field(False, description="Whether the user has explicitly confirmed this destructive failure.")
 
 
 class ResetNetworkArgs(BaseModel):
-    confirmed: bool = Field(False, description="Whether the user has explicitly confirmed resetting the active network.")
+    confirmed: Optional[bool] = Field(False, description="Whether the user has explicitly confirmed resetting the active network.")
 
 
 class WhatIfArgs(BaseModel):
@@ -37,7 +37,7 @@ class WhatIfArgs(BaseModel):
 class MaxFlowArgs(BaseModel):
     source: Optional[str] = Field(None, description="Origin node ID. Defaults to primary origin.")
     sinks: Optional[List[str]] = Field(None, description="List of target sink node IDs. Defaults to all edge servers.")
-    algo: Literal["edmonds_karp", "ford_fulkerson"] = Field("edmonds_karp", description="Max flow algorithm: 'edmonds_karp' (BFS) or 'ford_fulkerson' (DFS).")
+    algo: Optional[Literal["edmonds_karp", "ford_fulkerson"]] = Field("edmonds_karp", description="Max flow algorithm: 'edmonds_karp' (BFS) or 'ford_fulkerson' (DFS).")
 
 
 class FindBottleneckArgs(BaseModel):
@@ -56,12 +56,12 @@ class ListNodesArgs(BaseModel):
 class SearchHistoryArgs(BaseModel):
     query: str = Field(..., description="Query string to search past events and operational runbooks.")
     doc_type: Optional[Literal["event", "runbook"]] = Field(None, description="Optional document type filter: 'event' or 'runbook'.")
-    limit: int = Field(3, description="Maximum number of relevant context chunks to retrieve.")
+    limit: Optional[int] = Field(3, description="Maximum number of relevant context chunks to retrieve.")
 
 
 class GeneratePostmortemArgs(BaseModel):
     event_id: Optional[str] = Field(None, description="Event ID to generate postmortem for. Defaults to most recent failure.")
-    time_window_minutes: int = Field(60, description="Contextual event history time window in minutes.")
+    time_window_minutes: Optional[int] = Field(60, description="Contextual event history time window in minutes.")
 
 
 class ProposeMitigationsArgs(BaseModel):
@@ -96,7 +96,7 @@ COPILOT_TOOLS_OPENAI_SPEC: List[Dict[str, Any]] = [
                 "type": "object",
                 "properties": {
                     "source": {"type": "string", "description": "ID of user region (e.g. 'user_1', 'user_3')"},
-                    "algo": {"type": "string", "enum": ["bellman_ford", "floyd_warshall"], "default": "bellman_ford"},
+                    "algo": {"type": ["string", "null"], "enum": ["bellman_ford", "floyd_warshall", None], "default": "bellman_ford"},
                 },
                 "required": ["source"],
             },
@@ -124,9 +124,9 @@ COPILOT_TOOLS_OPENAI_SPEC: List[Dict[str, Any]] = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "remove_nodes": {"type": "array", "items": {"type": "string"}, "description": "Node IDs to simulate removing"},
-                    "remove_edges": {"type": "array", "items": {"type": "string"}, "description": "Edge IDs to simulate removing (e.g. 'edge_1<->edge_2')"},
-                    "source": {"type": "string", "description": "User region to evaluate before/after impact"},
+                    "remove_nodes": {"type": ["array", "null"], "items": {"type": "string"}, "description": "Node IDs to simulate removing"},
+                    "remove_edges": {"type": ["array", "null"], "items": {"type": "string"}, "description": "Edge IDs to simulate removing (e.g. 'edge_1<->edge_2')"},
+                    "source": {"type": ["string", "null"], "description": "User region to evaluate before/after impact"},
                 },
             },
         },
@@ -139,9 +139,9 @@ COPILOT_TOOLS_OPENAI_SPEC: List[Dict[str, Any]] = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "source": {"type": "string", "description": "Origin node ID"},
-                    "sinks": {"type": "array", "items": {"type": "string"}, "description": "Destination sink node IDs"},
-                    "algo": {"type": "string", "enum": ["edmonds_karp", "ford_fulkerson"], "default": "edmonds_karp"},
+                    "source": {"type": ["string", "null"], "description": "Origin node ID"},
+                    "sinks": {"type": ["array", "null"], "items": {"type": "string"}, "description": "Destination sink node IDs"},
+                    "algo": {"type": ["string", "null"], "enum": ["edmonds_karp", "ford_fulkerson", None], "default": "edmonds_karp"},
                 },
             },
         },
@@ -154,8 +154,8 @@ COPILOT_TOOLS_OPENAI_SPEC: List[Dict[str, Any]] = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "source": {"type": "string", "description": "Origin node ID"},
-                    "sinks": {"type": "array", "items": {"type": "string"}, "description": "Sink node IDs"},
+                    "source": {"type": ["string", "null"], "description": "Origin node ID"},
+                    "sinks": {"type": ["array", "null"], "items": {"type": "string"}, "description": "Sink node IDs"},
                 },
             },
         },
@@ -176,7 +176,7 @@ COPILOT_TOOLS_OPENAI_SPEC: List[Dict[str, Any]] = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "node_type": {"type": "string", "enum": ["origin", "edge_server", "user_region", "transit"]},
+                    "node_type": {"type": ["string", "null"], "enum": ["origin", "edge_server", "user_region", "transit", None]},
                 },
             },
         },
@@ -189,8 +189,8 @@ COPILOT_TOOLS_OPENAI_SPEC: List[Dict[str, Any]] = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "edge_id": {"type": "string", "description": "Edge identifier (e.g. 'user_1<->edge_1')"},
-                    "confirmed": {"type": "boolean", "default": False},
+                    "edge_id": {"type": ["string", "null"], "description": "Edge identifier (e.g. 'user_1<->edge_1')"},
+                    "confirmed": {"type": ["boolean", "null"], "default": False},
                 },
             },
         },
@@ -203,7 +203,7 @@ COPILOT_TOOLS_OPENAI_SPEC: List[Dict[str, Any]] = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "confirmed": {"type": "boolean", "default": False},
+                    "confirmed": {"type": ["boolean", "null"], "default": False},
                 },
             },
         },
@@ -217,8 +217,8 @@ COPILOT_TOOLS_OPENAI_SPEC: List[Dict[str, Any]] = [
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "Search query describing incident, symptoms, or mitigation procedures"},
-                    "doc_type": {"type": "string", "enum": ["event", "runbook"], "description": "Optional filter for events or runbooks"},
-                    "limit": {"type": "integer", "default": 3, "description": "Maximum number of relevant chunks to retrieve"},
+                    "doc_type": {"type": ["string", "null"], "enum": ["event", "runbook", None], "description": "Optional filter for events or runbooks"},
+                    "limit": {"type": ["integer", "null"], "default": 3, "description": "Maximum number of relevant chunks to retrieve"},
                 },
                 "required": ["query"],
             },
@@ -232,8 +232,8 @@ COPILOT_TOOLS_OPENAI_SPEC: List[Dict[str, Any]] = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "event_id": {"type": "string", "description": "Specific event ID (e.g. 'evt_abc123'). If omitted, targets most recent outage event."},
-                    "time_window_minutes": {"type": "integer", "default": 60, "description": "Contextual timeline history window in minutes."},
+                    "event_id": {"type": ["string", "null"], "description": "Specific event ID (e.g. 'evt_abc123'). If omitted, targets most recent outage event."},
+                    "time_window_minutes": {"type": ["integer", "null"], "default": 60, "description": "Contextual timeline history window in minutes."},
                 },
             },
         },
@@ -290,7 +290,7 @@ def execute_tool_call(
         if function_name == "shortest_path":
             res = net_service.shortest_path(
                 source=validated_args["source"],
-                algo=validated_args.get("algo", "bellman_ford"),
+                algo=validated_args.get("algo") or "bellman_ford",
                 session_id=session_id,
             )
         elif function_name == "compare_algorithms":
@@ -300,8 +300,8 @@ def execute_tool_call(
             )
         elif function_name == "what_if":
             res = net_service.what_if(
-                remove_nodes=validated_args.get("remove_nodes"),
-                remove_edges=validated_args.get("remove_edges"),
+                remove_nodes=validated_args.get("remove_nodes") or [],
+                remove_edges=validated_args.get("remove_edges") or [],
                 source=validated_args.get("source"),
                 session_id=session_id,
             )
@@ -309,7 +309,7 @@ def execute_tool_call(
             res = net_service.max_flow(
                 source=validated_args.get("source"),
                 sinks=validated_args.get("sinks"),
-                algo=validated_args.get("algo", "edmonds_karp"),
+                algo=validated_args.get("algo") or "edmonds_karp",
                 session_id=session_id,
             )
         elif function_name == "find_bottleneck":
@@ -341,7 +341,7 @@ def execute_tool_call(
             hits = vs.search(
                 query=validated_args["query"],
                 doc_type=validated_args.get("doc_type"),
-                limit=validated_args.get("limit", 3),
+                limit=validated_args.get("limit") or 3,
             )
             res = {
                 "query": validated_args["query"],
@@ -363,7 +363,7 @@ def execute_tool_call(
             res = gen_pm(
                 event_id=validated_args.get("event_id"),
                 session_id=session_id,
-                time_window_minutes=validated_args.get("time_window_minutes", 60),
+                time_window_minutes=validated_args.get("time_window_minutes") or 60,
             )
         elif function_name == "propose_mitigations":
             from services.mitigation_service import propose_and_simulate_mitigations

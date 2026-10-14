@@ -214,7 +214,7 @@ def test_groq_provider_detection(monkeypatch):
     provider = get_llm_provider()
     assert provider is not None
     assert provider.base_url == "https://api.groq.com/openai/v1"
-    assert provider.model == "llama-3.3-70b-versatile"
+    assert provider.model == "openai/gpt-oss-120b"
 
     # Custom Groq model override
     monkeypatch.setenv("GROQ_MODEL", "llama-3.1-8b-instant")
