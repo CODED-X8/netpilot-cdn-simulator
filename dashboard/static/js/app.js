@@ -1,11 +1,13 @@
 /**
- * Mini CDN Routing Simulator - Interactive Frontend (Review 1 Polished)
+ * Mini CDN Routing & Flow Simulator - Interactive Frontend
  * Features:
  * - Clean graph readability (edge weights on hover & active route only)
  * - Multi-hop path tracing & full node sequence display
  * - Live Dual-Algorithm Cross-Validation (Bellman-Ford vs Floyd-Warshall)
  * - Benchmark Analytics Modal with empirical plot and data table
  * - Fault adaptation Before-vs-After comparison diff
+ * - Max Flow & Min-Cut calculation (Edmonds-Karp vs Ford-Fulkerson)
+ * - Visual flow utilization on edges and bottleneck min-cut highlighting in RED
  */
 
 let network = null;
@@ -14,9 +16,17 @@ let edgesDataSet = null;
 let rawNetworkData = null;
 let selectedUserId = null;
 let currentPathEdgeIds = [];
+let currentFlowEdgeIds = [];
 let lastRouteState = null; // For Before/After Fault Diff
+let currentMode = "routing"; // "routing" | "flow"
 
 // DOM References
+const activeTopoName = document.getElementById("active-topo-name");
+const tabRouting = document.getElementById("tab-routing");
+const tabFlow = document.getElementById("tab-flow");
+const routingPanelGroup = document.getElementById("routing-panel-group");
+const flowPanelGroup = document.getElementById("flow-panel-group");
+
 const userSelect = document.getElementById("user-select");
 const btnKillEdge = document.getElementById("btn-kill-edge");
 const btnReset = document.getElementById("btn-reset");
@@ -24,7 +34,7 @@ const btnFit = document.getElementById("btn-fit");
 const topoStats = document.getElementById("topo-stats");
 const faultFeed = document.getElementById("fault-feed");
 
-// Telemetry DOM
+// Routing Telemetry DOM
 const singleView = document.getElementById("telemetry-single-view");
 const compareView = document.getElementById("telemetry-compare-view");
 const teleEdge = document.getElementById("tele-edge");
@@ -53,11 +63,57 @@ const diffAfterPath = document.getElementById("diff-after-path");
 const diffAfterLat = document.getElementById("diff-after-lat");
 const diffDelta = document.getElementById("diff-delta");
 
+// Max Flow DOM
+const flowSourceSelect = document.getElementById("flow-source-select");
+const flowSinksSelect = document.getElementById("flow-sinks-select");
+const btnRunFlow = document.getElementById("btn-run-flow");
+const flowSingleView = document.getElementById("flow-single-view");
+const flowCompareView = document.getElementById("flow-compare-view");
+const flowVal = document.getElementById("flow-val");
+const flowMincutCap = document.getElementById("flow-mincut-cap");
+const flowAug = document.getElementById("flow-aug");
+const flowOps = document.getElementById("flow-ops");
+const flowTime = document.getElementById("flow-time");
+const flowCutCount = document.getElementById("flow-cut-count");
+const flowCutEdges = document.getElementById("flow-cut-edges");
+const flowAgreementBadge = document.getElementById("flow-agreement-badge");
+
+const cmpEkFlow = document.getElementById("cmp-ek-flow");
+const cmpEkAug = document.getElementById("cmp-ek-aug");
+const cmpEkOps = document.getElementById("cmp-ek-ops");
+const cmpEkTime = document.getElementById("cmp-ek-time");
+const cmpFfFlow = document.getElementById("cmp-ff-flow");
+const cmpFfAug = document.getElementById("cmp-ff-aug");
+const cmpFfOps = document.getElementById("cmp-ff-ops");
+const cmpFfTime = document.getElementById("cmp-ff-time");
+
 // Modal DOM
 const btnOpenBenchmark = document.getElementById("btn-open-benchmark");
 const btnCloseModal = document.getElementById("btn-close-modal");
 const benchmarkModal = document.getElementById("benchmark-modal");
 const benchmarkTableBody = document.getElementById("benchmark-table-body");
+
+// Mode Tab Switching
+tabRouting.addEventListener("click", () => {
+  currentMode = "routing";
+  tabRouting.classList.add("active-tab");
+  tabFlow.classList.remove("active-tab");
+  routingPanelGroup.style.display = "block";
+  flowPanelGroup.style.display = "none";
+  clearVisualHighlights();
+  if (selectedUserId) {
+    triggerRouting(selectedUserId);
+  }
+});
+
+tabFlow.addEventListener("click", () => {
+  currentMode = "flow";
+  tabFlow.classList.add("active-tab");
+  tabRouting.classList.remove("active-tab");
+  routingPanelGroup.style.display = "none";
+  flowPanelGroup.style.display = "block";
+  clearVisualHighlights();
+});
 
 // Log feed helper
 function logFault(message, type = "info") {
@@ -75,6 +131,9 @@ async function loadNetwork(preserveSelection = false) {
     const data = await res.json();
     rawNetworkData = data;
 
+    if (activeTopoName) {
+      activeTopoName.textContent = `Topology: ${data.topology_name || "Active Network"}`;
+    }
     topoStats.textContent = `${data.nodes.length} Nodes | ${data.edges.length} Links`;
 
     // Populate user dropdown (filter to primary user endpoints)
@@ -89,6 +148,17 @@ async function loadNetwork(preserveSelection = false) {
         userSelect.appendChild(opt);
       });
 
+    // Populate flow source dropdown (origins or all nodes)
+    flowSourceSelect.innerHTML = "";
+    const origins = data.nodes.filter((n) => n.node_type === "origin");
+    const sourceCandidates = origins.length > 0 ? origins : data.nodes;
+    sourceCandidates.forEach((o) => {
+      const opt = document.createElement("option");
+      opt.value = o.id;
+      opt.textContent = `${o.label} (${o.id})`;
+      flowSourceSelect.appendChild(opt);
+    });
+
     if (preserveSelection && prevSelected) {
       userSelect.value = prevSelected;
       selectedUserId = prevSelected;
@@ -96,7 +166,7 @@ async function loadNetwork(preserveSelection = false) {
 
     renderVisNetwork(data);
 
-    if (preserveSelection && selectedUserId) {
+    if (preserveSelection && selectedUserId && currentMode === "routing") {
       triggerRouting(selectedUserId);
     }
   } catch (err) {
@@ -158,7 +228,9 @@ function renderVisNetwork(data) {
       if (nodeObj && nodeObj.node_type === "user_region" && nodeObj.tier !== "transit") {
         selectedUserId = clickedId;
         userSelect.value = clickedId;
-        triggerRouting(clickedId);
+        if (currentMode === "routing") {
+          triggerRouting(clickedId);
+        }
       }
     }
   });
@@ -169,7 +241,12 @@ function getSelectedAlgorithm() {
   return checked ? checked.value : "bellman_ford";
 }
 
-// Compute route and update UI
+function getSelectedFlowAlgorithm() {
+  const checked = document.querySelector('input[name="flow_algorithm"]:checked');
+  return checked ? checked.value : "edmonds_karp";
+}
+
+// Compute shortest-path route
 async function triggerRouting(userId) {
   if (!userId) return;
 
@@ -185,14 +262,13 @@ async function triggerRouting(userId) {
     const data = await res.json();
     if (!res.ok) {
       logFault(`Routing error: ${data.error}`, "kill");
-      clearRouteHighlight();
+      clearVisualHighlights();
       return;
     }
 
     displayTelemetry(data);
     highlightRoute(data.path);
 
-    // Save active route state for before/after diffing
     lastRouteState = {
       userId: userId,
       path: data.path ? [...data.path] : [],
@@ -205,7 +281,7 @@ async function triggerRouting(userId) {
   }
 }
 
-// Update telemetry dashboard
+// Update routing telemetry dashboard
 function displayTelemetry(data) {
   const isCompare = data.mode === "comparison";
 
@@ -239,17 +315,17 @@ function displayTelemetry(data) {
     if (!data.best_edge) {
       teleEdge.textContent = "UNREACHABLE";
       teleLatency.textContent = "∞";
-      teleOps.textContent = data.operations.toLocaleString();
-      teleTime.textContent = `${data.execution_time_ms} ms`;
+      teleOps.textContent = (data.operations || 0).toLocaleString();
+      teleTime.textContent = `${data.compute_time_ms || data.execution_time_ms} ms`;
       teleHops.textContent = "0";
     } else {
       const edgeNode = rawNetworkData.nodes.find((n) => n.id === data.best_edge);
       teleEdge.textContent = edgeNode ? edgeNode.label : data.best_edge;
       teleLatency.textContent = `${data.latency.toFixed(1)} ms`;
       teleAlgo.textContent = `${data.algorithm} (${data.complexity})`;
-      teleOps.textContent = `${data.operations.toLocaleString()} ops`;
-      teleTime.textContent = `${data.execution_time_ms} ms`;
-      teleHops.textContent = `${data.path.length - 1} hops`;
+      teleOps.textContent = `${(data.operations || 0).toLocaleString()} ops`;
+      teleTime.textContent = `${data.compute_time_ms || data.execution_time_ms} ms`;
+      teleHops.textContent = `${data.hops !== undefined ? data.hops : (data.path ? data.path.length - 1 : 0)} hops`;
     }
   }
 
@@ -268,7 +344,7 @@ function displayTelemetry(data) {
       let badgeClass = "badge-hop";
       if (isStart) badgeClass = "badge-user";
       else if (isEnd) badgeClass = "badge-edge";
-      else if (nodeObj && nodeObj.tier === "transit") badgeClass = "badge-transit";
+      else if (nodeObj && (nodeObj.tier === "transit" || nodeObj.node_type === "transit")) badgeClass = "badge-transit";
 
       const label = nodeObj ? nodeObj.label.split("·")[0].trim() : nodeId;
       return `<span class="path-node ${badgeClass}" title="${nodeId}">${label}</span>`;
@@ -276,9 +352,137 @@ function displayTelemetry(data) {
     .join(" <span class='path-arrow'>➔</span> ");
 }
 
+// Compute Maximum Flow
+btnRunFlow.addEventListener("click", async () => {
+  const source = flowSourceSelect.value;
+  const sinksMode = flowSinksSelect.value;
+  const algo = getSelectedFlowAlgorithm();
+
+  let sinks = [];
+  if (sinksMode === "all_edges") {
+    sinks = rawNetworkData.nodes.filter((n) => n.node_type === "edge_server").map((n) => n.id);
+  } else {
+    sinks = rawNetworkData.nodes.filter((n) => n.node_type === "user_region" && n.tier !== "transit").map((n) => n.id);
+  }
+
+  try {
+    const res = await fetch("/api/max-flow", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source: source, sinks: sinks, algorithm: algo }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      logFault(`Max flow computation error: ${data.error}`, "kill");
+      return;
+    }
+
+    displayFlowTelemetry(data);
+    highlightFlowAndMinCut(data.edge_flows, data.min_cut_edges);
+  } catch (err) {
+    console.error("Max flow request failed:", err);
+  }
+});
+
+// Display Max Flow Telemetry
+function displayFlowTelemetry(data) {
+  const isCompare = data.mode === "comparison";
+
+  if (isCompare) {
+    flowSingleView.style.display = "none";
+    flowCompareView.style.display = "block";
+
+    const ek = data.edmonds_karp;
+    const ff = data.ford_fulkerson;
+    const ag = data.agreement;
+
+    cmpEkFlow.textContent = `${ek.max_flow.toFixed(1)} Mbps`;
+    cmpEkAug.textContent = `${ek.augmenting_paths} paths`;
+    cmpEkOps.textContent = `${ek.operations.toLocaleString()} ops`;
+    cmpEkTime.textContent = `${ek.compute_time_ms.toFixed(2)} ms`;
+
+    cmpFfFlow.textContent = `${ff.max_flow.toFixed(1)} Mbps`;
+    cmpFfAug.textContent = `${ff.augmenting_paths} paths`;
+    cmpFfOps.textContent = `${ff.operations.toLocaleString()} ops`;
+    cmpFfTime.textContent = `${ff.compute_time_ms.toFixed(2)} ms`;
+
+    if (ag.matched) {
+      flowAgreementBadge.className = "agreement-badge";
+      flowAgreementBadge.innerHTML = "✅ 100% Agreement: Both EK and FF Computed Identical Max Flow Value";
+    } else {
+      flowAgreementBadge.className = "agreement-badge agreement-mismatch";
+      flowAgreementBadge.innerHTML = `⚠️ Difference: &Delta; ${ag.flow_diff} Mbps`;
+    }
+  } else {
+    flowSingleView.style.display = "block";
+    flowCompareView.style.display = "none";
+
+    flowVal.textContent = `${data.max_flow.toFixed(1)} Mbps`;
+    flowMincutCap.textContent = `${data.min_cut_capacity.toFixed(1)} Mbps`;
+    flowAug.textContent = `${data.augmenting_paths} paths`;
+    flowOps.textContent = `${data.operations.toLocaleString()} ops`;
+    flowTime.textContent = `${data.compute_time_ms.toFixed(2)} ms`;
+    flowCutCount.textContent = `${data.min_cut_edges.length} edges`;
+  }
+
+  // Display Min-Cut Edges List
+  if (!data.min_cut_edges || data.min_cut_edges.length === 0) {
+    flowCutEdges.innerHTML = '<span class="text-muted">No bottleneck cut edges (flow is 0).</span>';
+  } else {
+    flowCutEdges.innerHTML = data.min_cut_edges
+      .map((e) => `<span class="path-node badge-mincut">${e.u} ➔ ${e.v}</span>`)
+      .join(" ");
+  }
+}
+
+// Highlight Flow Utilization and Min-Cut (in RED)
+function highlightFlowAndMinCut(edgeFlows, minCutEdges) {
+  clearVisualHighlights();
+
+  const minCutSet = new Set(minCutEdges.map((e) => `${e.u}->${e.v}`));
+  const updatedEdges = [];
+
+  rawNetworkData.edges.forEach((origEdge) => {
+    const forwardKey = `${origEdge.from}->${origEdge.to}`;
+    const reverseKey = `${origEdge.to}->${origEdge.from}`;
+
+    const isMinCut = minCutSet.has(forwardKey) || minCutSet.has(reverseKey);
+    const flowForward = edgeFlows ? edgeFlows[forwardKey] || 0.0 : 0.0;
+    const flowReverse = edgeFlows ? edgeFlows[reverseKey] || 0.0 : 0.0;
+    const totalFlow = Math.max(flowForward, flowReverse);
+
+    if (isMinCut) {
+      // Bottleneck Min-Cut Edge: Red Highlight
+      currentFlowEdgeIds.push(origEdge.id);
+      updatedEdges.push({
+        id: origEdge.id,
+        label: `[CUT] ${totalFlow.toFixed(0)}/${origEdge.bandwidth}M`,
+        color: { color: "#ef4444", highlight: "#dc2626" },
+        width: 4.5,
+        dashes: [6, 4],
+      });
+    } else if (totalFlow > 0) {
+      // Flow Carrying Link
+      currentFlowEdgeIds.push(origEdge.id);
+      const ratio = Math.min(1.0, totalFlow / origEdge.bandwidth);
+      updatedEdges.push({
+        id: origEdge.id,
+        label: `${totalFlow.toFixed(0)}/${origEdge.bandwidth}M`,
+        color: { color: "#00b4d8", highlight: "#38bdf8" },
+        width: 2.2 + ratio * 3.0,
+      });
+    }
+  });
+
+  if (updatedEdges.length > 0) {
+    edgesDataSet.update(updatedEdges);
+  }
+}
+
 // Highlight shortest path and show edge weight labels only along the route
 function highlightRoute(path) {
-  clearRouteHighlight();
+  clearVisualHighlights();
 
   if (!path || path.length < 2) return;
 
@@ -294,7 +498,6 @@ function highlightRoute(path) {
 
     if (edge) {
       pathEdgeIds.push(edge.id);
-      // Prominently display latency label on active path edges only!
       edgesDataSet.update({
         id: edge.id,
         label: `${edge.latency}ms`,
@@ -319,22 +522,26 @@ function highlightRoute(path) {
   });
 }
 
-// Clear route highlighting and reset edge labels to blank
-function clearRouteHighlight() {
-  if (!edgesDataSet || !nodesDataSet) return;
+// Clear visual highlights (route and flow)
+function clearVisualHighlights() {
+  if (!edgesDataSet || !nodesDataSet || !rawNetworkData) return;
 
-  currentPathEdgeIds.forEach((edgeId) => {
+  const resetEdgeIds = new Set([...currentPathEdgeIds, ...currentFlowEdgeIds]);
+
+  resetEdgeIds.forEach((edgeId) => {
     const origEdge = rawNetworkData.edges.find((e) => e.id === edgeId);
     if (origEdge) {
       edgesDataSet.update({
         id: edgeId,
-        label: "", // Remove label on inactive edges
+        label: "",
         color: origEdge.color,
         width: 1.5,
+        dashes: false,
       });
     }
   });
   currentPathEdgeIds = [];
+  currentFlowEdgeIds = [];
 
   rawNetworkData.nodes.forEach((n) => {
     nodesDataSet.update({
@@ -350,7 +557,7 @@ userSelect.addEventListener("change", (e) => {
   if (selectedUserId) {
     triggerRouting(selectedUserId);
   } else {
-    clearRouteHighlight();
+    clearVisualHighlights();
     lastRouteState = null;
     faultDiffCard.style.display = "none";
     teleEdge.textContent = "--";
@@ -365,7 +572,7 @@ userSelect.addEventListener("change", (e) => {
 
 document.querySelectorAll('input[name="algorithm"]').forEach((radio) => {
   radio.addEventListener("change", () => {
-    if (selectedUserId) {
+    if (selectedUserId && currentMode === "routing") {
       triggerRouting(selectedUserId);
     }
   });
@@ -389,8 +596,7 @@ btnKillEdge.addEventListener("click", async () => {
 
     await loadNetwork(true);
 
-    // If user had an active route, compute and display the before/after adaptation diff
-    if (previousState && selectedUserId) {
+    if (previousState && selectedUserId && currentMode === "routing") {
       setTimeout(() => {
         if (lastRouteState) {
           faultDiffCard.style.display = "block";

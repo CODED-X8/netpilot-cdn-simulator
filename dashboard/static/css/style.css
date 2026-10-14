@@ -601,6 +601,69 @@ body {
   background-color: var(--transit-color);
 }
 
+.badge-topo {
+  background-color: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  font-family: monospace;
+}
+
+.mode-tabs {
+  display: flex;
+  gap: 6px;
+  background-color: rgba(12, 18, 34, 0.8);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tab-btn:hover {
+  color: var(--text-main);
+}
+
+.tab-btn.active-tab {
+  background-color: var(--bg-card);
+  color: var(--accent);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #0284c7, #2563eb);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, #0369a1, #1d4ed8);
+}
+
+.mincut-line {
+  width: 14px;
+  height: 3px;
+  background-color: #ef4444;
+  display: inline-block;
+  border-top: 1px dashed white;
+}
+
+.badge-mincut {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border: 1px solid #ef4444;
+}
+
 .legend-line {
   width: 14px;
   height: 3px;

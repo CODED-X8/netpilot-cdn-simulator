@@ -1,11 +1,15 @@
-"""Flask Web Dashboard backend for Mini CDN Routing Simulator."""
+"""Flask Web Dashboard backend for Mini CDN Routing Simulator.
+
+Integrates with the pure functional service layer (services/network_service.py)
+and SQLite Event Store (storage/event_store.py).
+Supports routing, cross-validation, fault simulation, max flow, what-if, and metrics.
+"""
 
 import os
 import sys
-import time
-import random
+import html
 import csv
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 from flask import Flask, render_template, jsonify, request, send_file
 
@@ -13,22 +17,35 @@ from flask import Flask, render_template, jsonify, request, send_file
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from graph.network import Graph
-from graph.generator import generate_cdn_topology
-from routing.bellman_ford import bellman_ford, find_best_edge_server_bf
-from routing.floyd_warshall import floyd_warshall, find_best_edge_server_fw
+import services.network_service as net_service
+from storage.event_store import get_event_store
 
 app = Flask(__name__)
 
-# In-memory active graph state
-ACTIVE_GRAPH: Graph = generate_cdn_topology(num_origins=1, num_edges=8, num_users=5, seed=42)
-INITIAL_SEED = 42
+
+def _get_session_id() -> str:
+    """Extract or default session ID from request headers or query params."""
+    return request.headers.get("X-Session-ID") or request.args.get("session_id") or "default"
+
+
+def sanitize_text(text: Any, max_len: int = 100) -> str:
+    """Sanitize and HTML-escape untrusted input text for UI safety."""
+    if text is None:
+        return ""
+    # Strip non-printable/control characters
+    cleaned = "".join(ch for ch in str(text) if ch.isprintable())
+    # Truncate to max length
+    cleaned = cleaned[:max_len]
+    return html.escape(cleaned)
 
 
 def format_graph_for_vis(g: Graph) -> Dict[str, Any]:
-    """Transform Graph data structure into Vis.js network format with clean readability."""
+    """Transform Graph data structure into Vis.js network format with sanitized labels."""
     nodes = []
     for node in g.get_nodes():
         tier = node.metadata.get("tier", "edge")
+        safe_label = sanitize_text(node.label)
+        safe_id = sanitize_text(node.id)
 
         if node.node_type == "origin":
             shape = "diamond"
@@ -48,8 +65,7 @@ def format_graph_for_vis(g: Graph) -> Dict[str, Any]:
             }
             size = 22
             font = {"color": "#ffffff", "face": "system-ui", "size": 12, "strokeWidth": 2, "strokeColor": "#0f172a"}
-        elif tier == "transit":
-            # Regional ISP / Transit Relay
+        elif tier == "transit" or node.node_type == "transit":
             shape = "dot"
             color = {
                 "background": "#8b5cf6",
@@ -58,7 +74,7 @@ def format_graph_for_vis(g: Graph) -> Dict[str, Any]:
             }
             size = 15
             font = {"color": "#cbd5e1", "face": "system-ui", "size": 10, "strokeWidth": 2, "strokeColor": "#0f172a"}
-        else:  # primary user_region
+        else:  # user_region
             shape = "dot"
             color = {
                 "background": "#10b981",
@@ -70,14 +86,14 @@ def format_graph_for_vis(g: Graph) -> Dict[str, Any]:
 
         nodes.append({
             "id": node.id,
-            "label": node.label,
+            "label": safe_label,
             "node_type": node.node_type,
             "tier": tier,
             "shape": shape,
             "color": color,
             "size": size,
             "font": font,
-            "title": f"<b>{node.label}</b><br>ID: <code>{node.id}</code><br>Type: {node.node_type}",
+            "title": f"<b>{safe_label}</b><br>ID: <code>{safe_id}</code><br>Type: {node.node_type}",
         })
 
     edges = []
@@ -96,9 +112,8 @@ def format_graph_for_vis(g: Graph) -> Dict[str, Any]:
             arrows = {"to": {"enabled": True, "scaleFactor": 0.7}}
             edge_id = f"{edge.u}->{edge.v}"
 
-        # Latency shown in hover tooltip; direct label is blank by default to eliminate clutter
         tooltip = (
-            f"<b>Link:</b> {edge.u} &harr; {edge.v}<br>"
+            f"<b>Link:</b> {sanitize_text(edge.u)} &harr; {sanitize_text(edge.v)}<br>"
             f"<b>Latency:</b> {edge.latency:.1f} ms<br>"
             f"<b>Bandwidth:</b> {edge.bandwidth_capacity:.0f} Mbps"
         )
@@ -107,7 +122,7 @@ def format_graph_for_vis(g: Graph) -> Dict[str, Any]:
             "id": edge_id,
             "from": edge.u,
             "to": edge.v,
-            "label": "",  # Empty by default for canvas readability
+            "label": "",  # Empty by default for clean canvas readability
             "latency": edge.latency,
             "bandwidth": edge.bandwidth_capacity,
             "is_bidirectional": is_bidi,
@@ -129,146 +144,173 @@ def index():
 
 @app.route("/api/network", methods=["GET"])
 def get_network():
-    """Retrieve full active network topology in Vis.js format."""
-    return jsonify(format_graph_for_vis(ACTIVE_GRAPH))
+    """Retrieve full active network topology in Vis.js format for the current session."""
+    session_id = _get_session_id()
+    entry = net_service.get_active_topology_entry(session_id)
+    vis_data = format_graph_for_vis(entry["graph"])
+    vis_data["topology_name"] = entry["name"]
+    return jsonify(vis_data)
 
 
 @app.route("/api/network/reset", methods=["POST"])
 def reset_network():
-    """Reset network to pristine baseline topology."""
-    global ACTIVE_GRAPH
-    ACTIVE_GRAPH = generate_cdn_topology(num_origins=1, num_edges=8, num_users=5, seed=INITIAL_SEED)
-    return jsonify({
-        "status": "success",
-        "message": "Network reset to initial baseline topology.",
-        "network": format_graph_for_vis(ACTIVE_GRAPH),
-    })
-
-
-@app.route("/api/route", methods=["POST"])
-def compute_route():
-    """Compute shortest path with support for single algorithm or dual cross-validation comparison."""
-    data = request.get_json() or {}
-    user_id = data.get("user_id")
-    algorithm = data.get("algorithm", "bellman_ford").lower()
-
-    if not user_id or not ACTIVE_GRAPH.has_node(user_id):
-        return jsonify({"error": f"Invalid or missing user_region: '{user_id}'"}), 400
-
-    node = ACTIVE_GRAPH.get_node(user_id)
-    if node.node_type != "user_region":
-        return jsonify({"error": f"Node '{user_id}' is of type '{node.node_type}', expected 'user_region'"}), 400
-
-    # Cross-validation mode: Run BOTH Bellman-Ford & Floyd-Warshall
-    if algorithm in ("compare", "compare_both"):
-        # Bellman-Ford execution
-        t0 = time.perf_counter()
-        bf_res = find_best_edge_server_bf(ACTIVE_GRAPH, user_id, early_stopping=False)
-        t1 = time.perf_counter()
-        bf_time_ms = round((t1 - t0) * 1000.0, 4)
-
-        # Floyd-Warshall execution
-        t0 = time.perf_counter()
-        fw_res = find_best_edge_server_fw(ACTIVE_GRAPH, user_id)
-        t1 = time.perf_counter()
-        fw_time_ms = round((t1 - t0) * 1000.0, 4)
-
-        bf_lat = bf_res.get("latency")
-        fw_lat = fw_res.get("latency")
-        matched = (bf_lat is not None and fw_lat is not None and abs(bf_lat - fw_lat) < 1e-4)
-
-        path = bf_res.get("path") or []
-        path_edges = []
-        for i in range(len(path) - 1):
-            path_edges.append({"from": path[i], "to": path[i + 1]})
-
-        return jsonify({
-            "mode": "comparison",
-            "user_id": user_id,
-            "path": path,
-            "path_edges": path_edges,
-            "best_edge": bf_res.get("best_edge"),
-            "latency": bf_lat,
-            "bellman_ford": {
-                "algorithm": "Bellman-Ford",
-                "complexity": "O(|V| * |E|)",
-                "best_edge": bf_res.get("best_edge"),
-                "latency": bf_lat,
-                "path": bf_res.get("path"),
-                "operations": bf_res.get("operations"),
-                "execution_time_ms": bf_time_ms,
-            },
-            "floyd_warshall": {
-                "algorithm": "Floyd-Warshall",
-                "complexity": "O(|V|^3)",
-                "best_edge": fw_res.get("best_edge"),
-                "latency": fw_lat,
-                "path": fw_res.get("path"),
-                "operations": fw_res.get("operations"),
-                "execution_time_ms": fw_time_ms,
-            },
-            "agreement": {
-                "matched": matched,
-                "best_edge_match": bf_res.get("best_edge") == fw_res.get("best_edge"),
-                "latency_diff": round(abs((bf_lat or 0) - (fw_lat or 0)), 4),
-            },
-            "node_count": len(ACTIVE_GRAPH),
-            "edge_count": ACTIVE_GRAPH.edge_count(),
-        })
-
-    # Single algorithm execution
-    t0 = time.perf_counter()
-    if algorithm == "bellman_ford":
-        result = find_best_edge_server_bf(ACTIVE_GRAPH, user_id, early_stopping=False)
-        complexity = "O(|V| * |E|)"
-    elif algorithm == "floyd_warshall":
-        result = find_best_edge_server_fw(ACTIVE_GRAPH, user_id)
-        complexity = "O(|V|^3)"
-    else:
-        return jsonify({"error": f"Unsupported algorithm '{algorithm}'"}), 400
-    t1 = time.perf_counter()
-
-    exec_time_ms = round((t1 - t0) * 1000.0, 4)
-    path = result.get("path") or []
-    path_edges = []
-    for i in range(len(path) - 1):
-        path_edges.append({"from": path[i], "to": path[i + 1]})
-
-    return jsonify({
-        "mode": "single",
-        "user_id": user_id,
-        "best_edge": result.get("best_edge"),
-        "latency": result.get("latency"),
-        "path": path,
-        "path_edges": path_edges,
-        "operations": result.get("operations"),
-        "execution_time_ms": exec_time_ms,
-        "algorithm": result.get("algorithm"),
-        "complexity": complexity,
-        "node_count": len(ACTIVE_GRAPH),
-        "edge_count": ACTIVE_GRAPH.edge_count(),
-    })
+    """Reset network to pristine baseline topology via service layer."""
+    session_id = _get_session_id()
+    result = net_service.reset_network(session_id=session_id)
+    g = net_service.get_active_graph(session_id)
+    result["network"] = format_graph_for_vis(g)
+    return jsonify(result)
 
 
 @app.route("/api/network/kill-edge", methods=["POST"])
 def kill_random_edge():
-    """Simulate link failure by removing an edge from the active network."""
-    edges = ACTIVE_GRAPH.get_edges()
-    if not edges:
-        return jsonify({"error": "No edges remaining in the network."}), 400
+    """Simulate link failure via service layer."""
+    session_id = _get_session_id()
+    data = request.get_json(silent=True) or {}
+    edge_id = data.get("edge_id")
 
-    chosen_edge = random.choice(edges)
-    u, v = chosen_edge.u, chosen_edge.v
-    lat = chosen_edge.latency
+    try:
+        result = net_service.kill_edge(edge_id=edge_id, session_id=session_id)
+        g = net_service.get_active_graph(session_id)
+        result["network"] = format_graph_for_vis(g)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
-    ACTIVE_GRAPH.remove_edge(u, v, bidirectional=True)
 
-    return jsonify({
-        "status": "success",
-        "killed_edge": {"u": u, "v": v, "latency": lat},
-        "remaining_edges": ACTIVE_GRAPH.edge_count(),
-        "network": format_graph_for_vis(ACTIVE_GRAPH),
-    })
+@app.route("/api/route", methods=["POST"])
+def compute_route():
+    """Compute shortest path or dual cross-validation comparison via service layer."""
+    session_id = _get_session_id()
+    data = request.get_json() or {}
+    user_id = data.get("user_id")
+    algorithm = data.get("algorithm", "bellman_ford").lower()
+
+    if not user_id:
+        return jsonify({"error": "Missing user_id parameter"}), 400
+
+    try:
+        if algorithm in ("compare", "compare_both"):
+            result = net_service.compare_algorithms(source=user_id, session_id=session_id)
+            result["mode"] = "comparison"
+            result["user_id"] = user_id
+            return jsonify(result)
+        else:
+            result = net_service.shortest_path(source=user_id, algo=algorithm, session_id=session_id)
+            result["mode"] = "single"
+            result["user_id"] = user_id
+            return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/max-flow", methods=["POST"])
+def compute_max_flow_api():
+    """Execute max flow computation or dual comparison (Edmonds-Karp vs Ford-Fulkerson)."""
+    session_id = _get_session_id()
+    data = request.get_json() or {}
+    source = data.get("source")
+    sinks = data.get("sinks")
+    algorithm = data.get("algorithm", "edmonds_karp").lower()
+
+    try:
+        if algorithm in ("compare", "compare_both"):
+            ek_res = net_service.max_flow(source=source, sinks=sinks, algo="edmonds_karp", session_id=session_id)
+            ff_res = net_service.max_flow(source=source, sinks=sinks, algo="ford_fulkerson", session_id=session_id)
+
+            return jsonify({
+                "mode": "comparison",
+                "max_flow": ek_res["max_flow"],
+                "edge_flows": ek_res["edge_flows"],
+                "min_cut_edges": ek_res["min_cut_edges"],
+                "min_cut_capacity": ek_res["min_cut_capacity"],
+                "source": ek_res["source"],
+                "sinks": ek_res["sinks"],
+                "edmonds_karp": {
+                    "algorithm": "Edmonds-Karp (BFS)",
+                    "max_flow": ek_res["max_flow"],
+                    "augmenting_paths": ek_res["augmenting_paths"],
+                    "operations": ek_res["operations"],
+                    "compute_time_ms": ek_res["compute_time_ms"],
+                },
+                "ford_fulkerson": {
+                    "algorithm": "Ford-Fulkerson (DFS)",
+                    "max_flow": ff_res["max_flow"],
+                    "augmenting_paths": ff_res["augmenting_paths"],
+                    "operations": ff_res["operations"],
+                    "compute_time_ms": ff_res["compute_time_ms"],
+                },
+                "agreement": {
+                    "matched": abs(ek_res["max_flow"] - ff_res["max_flow"]) < 1e-4,
+                    "flow_diff": round(abs(ek_res["max_flow"] - ff_res["max_flow"]), 2),
+                },
+            })
+        else:
+            result = net_service.max_flow(source=source, sinks=sinks, algo=algorithm, session_id=session_id)
+            result["mode"] = "single"
+            return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/what-if", methods=["POST"])
+def what_if_api():
+    """Simulate counterfactual removals on a graph copy via service layer."""
+    session_id = _get_session_id()
+    data = request.get_json() or {}
+    remove_nodes = data.get("remove_nodes")
+    remove_edges = data.get("remove_edges")
+    source = data.get("source")
+
+    try:
+        result = net_service.what_if(
+            remove_nodes=remove_nodes,
+            remove_edges=remove_edges,
+            source=source,
+            session_id=session_id,
+        )
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/bottleneck", methods=["GET"])
+def get_bottleneck_api():
+    """Get network bottlenecks and min-cut via service layer."""
+    session_id = _get_session_id()
+    source = request.args.get("source")
+    try:
+        result = net_service.find_bottleneck(source=source, session_id=session_id)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/metrics", methods=["GET"])
+def get_metrics_api():
+    """Retrieve network metrics via service layer."""
+    session_id = _get_session_id()
+    metrics = net_service.get_metrics(session_id=session_id)
+    return jsonify(metrics)
+
+
+@app.route("/api/nodes", methods=["GET"])
+def get_nodes_api():
+    """Retrieve list of nodes in active topology."""
+    session_id = _get_session_id()
+    node_type = request.args.get("type")
+    nodes = net_service.list_nodes(node_type=node_type, session_id=session_id)
+    return jsonify({"nodes": nodes})
+
+
+@app.route("/api/events", methods=["GET"])
+def get_events_api():
+    """Retrieve recent structured network events from SQLite Event Store."""
+    session_id = _get_session_id()
+    event_type = request.args.get("type")
+    limit = int(request.args.get("limit", 50))
+    events = get_event_store().list_events(session_id=session_id, event_type=event_type, limit=limit)
+    return jsonify({"events": [e.to_dict() for e in events]})
 
 
 @app.route("/api/benchmark-data", methods=["GET"])
