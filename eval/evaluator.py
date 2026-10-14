@@ -434,8 +434,19 @@ def run_evaluation(
     # Standard rates: $0.15/1M in, $0.60/1M out
     est_cost_usd = (est_prompt_tokens / 1_000_000) * 0.15 + (est_completion_tokens / 1_000_000) * 0.60
 
-    provider_name = "fake" if dry_run else os.environ.get("LLM_PROVIDER", "openai")
-    model_name = "fake-eval-model" if dry_run else os.environ.get("LLM_MODEL", "gpt-4o-mini")
+    from copilot.llm_provider import get_active_provider_name
+
+    if dry_run:
+        provider_name = "fake"
+        model_name = "fake-eval-model"
+    else:
+        active_prov = get_active_provider_name()
+        provider_name = os.environ.get("LLM_PROVIDER") or (active_prov if active_prov != "offline" else "groq")
+        if provider_name == "groq":
+            model_name = os.environ.get("GROQ_MODEL") or os.environ.get("LLM_MODEL") or "llama-3.3-70b-versatile"
+        else:
+            model_name = os.environ.get("LLM_MODEL", "gpt-4o-mini")
+
     today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     print("\n" + "=" * 60)

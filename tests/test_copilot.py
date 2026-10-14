@@ -188,7 +188,8 @@ def test_copilot_chat_api_endpoint(monkeypatch):
     """Test Flask endpoint /api/copilot/chat."""
     client = app.test_client()
 
-    # When LLM_API_KEY is not set, should return offline/disabled explanation
+    # When API keys are not set, should return offline/disabled explanation
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
     monkeypatch.delenv("LLM_API_KEY", raising=False)
     resp = client.post("/api/copilot/chat", json={"message": "What is the bottleneck?"})
     assert resp.status_code == 200
@@ -198,3 +199,24 @@ def test_copilot_chat_api_endpoint(monkeypatch):
     # Empty payload returns 400
     resp_empty = client.post("/api/copilot/chat", json={})
     assert resp_empty.status_code == 400
+
+
+def test_groq_provider_detection(monkeypatch):
+    """Test that GROQ_API_KEY automatically configures Groq endpoint and llama-3.3-70b-versatile."""
+    from copilot.llm_provider import get_llm_provider, get_active_provider_name
+
+    monkeypatch.setenv("GROQ_API_KEY", "gsk_testkey123456789")
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    monkeypatch.delenv("GROQ_MODEL", raising=False)
+    monkeypatch.delenv("LLM_MODEL", raising=False)
+
+    assert get_active_provider_name() == "groq"
+    provider = get_llm_provider()
+    assert provider is not None
+    assert provider.base_url == "https://api.groq.com/openai/v1"
+    assert provider.model == "llama-3.3-70b-versatile"
+
+    # Custom Groq model override
+    monkeypatch.setenv("GROQ_MODEL", "llama-3.1-8b-instant")
+    provider2 = get_llm_provider()
+    assert provider2.model == "llama-3.1-8b-instant"

@@ -39,9 +39,8 @@ def run_copilot_chat(
         return {
             "answer": (
                 "⚠️ **NetPilot Copilot is currently offline / disabled.**\n\n"
-                "To enable AI copilot features, configure the `LLM_API_KEY` environment variable "
-                "(and optionally `LLM_BASE_URL` and `LLM_MODEL`). The rest of the dashboard and "
-                "routing simulator remains fully functional."
+                "To enable AI copilot features, configure `GROQ_API_KEY` (e.g. `export GROQ_API_KEY=\"gsk_...\"`) "
+                "or `LLM_API_KEY`. The rest of the dashboard and routing simulator remains fully functional."
             ),
             "tools_used": [],
             "tokens": 0,

@@ -50,6 +50,22 @@ Now open your web browser and go to:
 
 ---
 
+### 🔑 Enabling the NetPilot AI Copilot with Groq (Fast & Free)
+
+The project includes an automatic integration with **Groq** ([https://console.groq.com/keys](https://console.groq.com/keys)). To activate live AI copilot features:
+
+```bash
+# Set your Groq API key (starts with gsk_...)
+export GROQ_API_KEY="gsk_your_groq_api_key_here"
+
+# Start the server (Groq endpoint and llama-3.3-70b-versatile are auto-detected!)
+python dashboard/app.py
+```
+
+*Note: If `GROQ_API_KEY` is not set, the simulator and Copilot automatically and safely fall back to the built-in offline `FakeLLMProvider`.*
+
+---
+
 ### Option B: Run via Docker (Zero Configuration)
 
 If you have Docker installed:

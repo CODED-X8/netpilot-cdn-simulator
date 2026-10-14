@@ -85,13 +85,14 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             "messages": messages,
             "temperature": 0.0,
         }
-        if tools:
+        if tools and len(tools) > 0:
             payload["tools"] = tools
             payload["tool_choice"] = "auto"
 
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}",
+            "User-Agent": "NetPilot/1.0 (Mini CDN Simulator)",
         }
 
         req = urllib.request.Request(
@@ -336,17 +337,47 @@ class FakeLLMProvider(BaseLLMProvider):
             )
 
 
+def get_active_provider_name() -> str:
+    """Detect configured provider: 'groq', 'openai', or 'offline'."""
+    groq_key = os.environ.get("GROQ_API_KEY", "").strip()
+    llm_key = os.environ.get("LLM_API_KEY", "").strip()
+    if groq_key or llm_key.startswith("gsk_") or os.environ.get("LLM_PROVIDER", "").lower() == "groq":
+        return "groq"
+    if llm_key:
+        return "openai"
+    return "offline"
+
+
 def get_llm_provider(force_fake: bool = False, fake_steps: Optional[List[Any]] = None) -> Optional[BaseLLMProvider]:
-    """Retrieve active LLM Provider based on env vars or force fake provider."""
+    """Retrieve active LLM Provider based on env vars (Groq, OpenAI, or offline fake provider)."""
     if force_fake:
         return FakeLLMProvider(scripted_steps=fake_steps)
 
-    api_key = os.environ.get("LLM_API_KEY", "").strip()
+    # Check for Groq API key first, then generic LLM_API_KEY
+    groq_key = os.environ.get("GROQ_API_KEY", "").strip()
+    llm_key = os.environ.get("LLM_API_KEY", "").strip()
+
+    api_key = groq_key or llm_key
     if not api_key:
         # Copilot features disabled when API key is not configured
         return None
 
-    base_url = os.environ.get("LLM_BASE_URL", "https://api.openai.com/v1").strip()
-    model = os.environ.get("LLM_MODEL", "gpt-4o-mini").strip()
+    # Detect if target is Groq
+    is_groq = bool(groq_key) or api_key.startswith("gsk_") or os.environ.get("LLM_PROVIDER", "").lower() == "groq"
+
+    if is_groq:
+        base_url = (
+            os.environ.get("GROQ_BASE_URL", "").strip()
+            or os.environ.get("LLM_BASE_URL", "").strip()
+            or "https://api.groq.com/openai/v1"
+        )
+        model = (
+            os.environ.get("GROQ_MODEL", "").strip()
+            or os.environ.get("LLM_MODEL", "").strip()
+            or "llama-3.3-70b-versatile"
+        )
+    else:
+        base_url = os.environ.get("LLM_BASE_URL", "https://api.openai.com/v1").strip()
+        model = os.environ.get("LLM_MODEL", "gpt-4o-mini").strip()
 
     return OpenAICompatibleProvider(api_key=api_key, base_url=base_url, model=model)
