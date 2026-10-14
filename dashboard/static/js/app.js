@@ -1242,6 +1242,153 @@ if (btnRunProposals) {
   });
 }
 
+// ==================== LLMOps Panel ====================
+const btnOpenLLMOps = document.getElementById("btn-open-llmops");
+const llmopsModal = document.getElementById("llmops-modal");
+const btnCloseLLMOps = document.getElementById("btn-close-llmops");
+
+const llmopsTokenStats = document.getElementById("llmops-token-stats");
+const llmopsTokenBar = document.getElementById("llmops-token-bar");
+const llmopsRagStatus = document.getElementById("llmops-rag-status");
+const llmopsRagStats = document.getElementById("llmops-rag-stats");
+const llmopsRunBadge = document.getElementById("llmops-run-badge");
+const llmopsComparisonTbody = document.getElementById("llmops-comparison-tbody");
+const llmopsPlotContainer = document.getElementById("llmops-plot-container");
+const llmopsPlotImg = document.getElementById("llmops-plot-img");
+const llmopsAuditTbody = document.getElementById("llmops-audit-tbody");
+
+async function loadLLMOpsData() {
+  try {
+    const res = await fetch("/api/llmops/stats");
+    if (!res.ok) throw new Error("Failed to load LLMOps stats");
+    const data = await res.json();
+
+    // 1. Token Budget
+    if (data.token_budget) {
+      const used = data.token_budget.used || 0;
+      const limit = data.token_budget.limit || 100000;
+      const pct = Math.min(data.token_budget.percent || 0, 100);
+      llmopsTokenStats.textContent = `${used.toLocaleString()} / ${limit.toLocaleString()}`;
+      llmopsTokenBar.style.width = `${pct}%`;
+      if (pct > 90) {
+        llmopsTokenBar.style.background = "#f87171";
+      } else if (pct > 75) {
+        llmopsTokenBar.style.background = "#fbbf24";
+      } else {
+        llmopsTokenBar.style.background = "linear-gradient(90deg, #3b82f6, #8b5cf6)";
+      }
+    }
+
+    // 2. Runbook Coverage
+    if (data.runbook_coverage) {
+      llmopsRagStats.textContent = `${data.runbook_coverage.runbook_count} runbooks (${data.runbook_coverage.total_chunks} indexed chunks)`;
+      llmopsRagStatus.textContent = data.runbook_coverage.status === "healthy" ? "Healthy ✅" : "Degraded ⚠️";
+    }
+
+    // 3. Evaluation Findings
+    if (data.is_real_run) {
+      llmopsRunBadge.className = "badge badge-success";
+      llmopsRunBadge.textContent = data.run_message || "Live Evaluation Run";
+    } else {
+      llmopsRunBadge.className = "badge badge-warning";
+      llmopsRunBadge.textContent = "No real evaluation run yet";
+    }
+
+    // Render Benchmark Comparison Table
+    const summary = data.evaluation_summary || {};
+    const configs = [
+      { key: "plain_llm", name: "Plain LLM (Topology Text)" },
+      { key: "llm_rag", name: "LLM + RAG (Runbooks Only)" },
+      { key: "llm_tools", name: "LLM + Tools (Custom Engines)" },
+      { key: "full_system", name: "Full NetPilot (Tools + RAG + Verifier)" },
+    ];
+
+    let tableHtml = "";
+    if (!data.is_real_run) {
+      tableHtml += `
+        <tr style="background: rgba(245, 158, 11, 0.08);">
+          <td colspan="7" style="text-align: center; color: #fbbf24; padding: 10px; font-weight: 500;">
+            ⚠️ No real evaluation run yet. Showing synthetic dry-run baseline data below.
+          </td>
+        </tr>
+      `;
+    }
+
+    configs.forEach((c) => {
+      const s = summary[c.key] || {};
+      const acc = s.accuracy_percent !== undefined ? `${s.accuracy_percent}%` : "--";
+      const toolAcc = s.tool_selection_accuracy_percent !== undefined ? `${s.tool_selection_accuracy_percent}%` : "--";
+      const halluc = s.hallucination_rate_percent !== undefined ? `${s.hallucination_rate_percent}%` : "--";
+      const p50 = s.latency_p50_ms !== undefined ? `${s.latency_p50_ms} ms` : "--";
+      const p95 = s.latency_p95_ms !== undefined ? `${s.latency_p95_ms} ms` : "--";
+      const cost = s.cost_per_1k_usd !== undefined ? `$${s.cost_per_1k_usd.toFixed(3)}` : "--";
+
+      tableHtml += `
+        <tr>
+          <td><strong>${c.name}</strong></td>
+          <td style="color: ${s.accuracy_percent > 50 ? '#34d399' : '#94a3b8'}; font-weight: bold;">${acc}</td>
+          <td>${toolAcc}</td>
+          <td style="color: ${s.hallucination_rate_percent > 10 ? '#f87171' : '#34d399'}; font-weight: bold;">${halluc}</td>
+          <td>${p50}</td>
+          <td>${p95}</td>
+          <td style="font-family: monospace;">${cost}</td>
+        </tr>
+      `;
+    });
+    llmopsComparisonTbody.innerHTML = tableHtml;
+
+    // Show Plot if available
+    if (data.has_comparison_plot) {
+      llmopsPlotContainer.style.display = "block";
+      llmopsPlotImg.src = `/api/llmops/plot?t=${Date.now()}`;
+    } else {
+      llmopsPlotContainer.style.display = "none";
+    }
+
+    // 4. Audit Log (Strictly sanitized and escaped)
+    const auditLogs = data.audit_log || [];
+    if (auditLogs.length === 0) {
+      llmopsAuditTbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 10px;">No audit events logged yet.</td></tr>`;
+    } else {
+      let auditHtml = "";
+      auditLogs.forEach((ev) => {
+        const timeStr = ev.timestamp ? ev.timestamp.split("T")[1].split(".")[0] : "--";
+        const inStr = JSON.stringify(ev.inputs || {}).substring(0, 45);
+        const statusBadge = ev.verifier_status === "verified"
+          ? `<span class="badge badge-success" style="font-size: 0.65rem;">Verified</span>`
+          : `<span class="badge badge-info" style="font-size: 0.65rem;">Logged</span>`;
+
+        auditHtml += `
+          <tr>
+            <td style="font-family: monospace;">${timeStr}</td>
+            <td><strong>${ev.event_type}</strong></td>
+            <td>${ev.topology_name}</td>
+            <td>${ev.duration_ms} ms</td>
+            <td style="font-family: monospace; font-size: 0.7rem; color: var(--text-muted);">${inStr}</td>
+            <td>${statusBadge}</td>
+          </tr>
+        `;
+      });
+      llmopsAuditTbody.innerHTML = auditHtml;
+    }
+  } catch (err) {
+    console.error("Failed to load LLMOps data:", err);
+  }
+}
+
+if (btnOpenLLMOps && llmopsModal) {
+  btnOpenLLMOps.addEventListener("click", () => {
+    llmopsModal.style.display = "flex";
+    loadLLMOpsData();
+  });
+}
+
+if (btnCloseLLMOps && llmopsModal) {
+  btnCloseLLMOps.addEventListener("click", () => {
+    llmopsModal.style.display = "none";
+  });
+}
+
 // Initialize on DOM load
 document.addEventListener("DOMContentLoaded", () => {
   loadNetwork();

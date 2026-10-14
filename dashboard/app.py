@@ -602,5 +602,120 @@ def get_benchmark_image():
     return send_file(img_path, mimetype="image/png")
 
 
+@app.route("/api/llmops/stats", methods=["GET"])
+def get_llmops_stats_api():
+    """Return LLMOps metrics, benchmark comparison, token budget, runbook coverage, and sanitized audit log."""
+    from copilot.guardrails import get_daily_token_usage
+    from rag.vector_store import get_vector_store
+
+    # 1. Benchmark Evaluation Findings
+    eval_summary_path = os.path.join(os.path.dirname(__file__), "..", "eval", "results", "eval_summary.json")
+    eval_summary: Dict[str, Any] = {}
+    is_real_run = False
+    run_message = "No evaluation run executed yet."
+
+    if os.path.exists(eval_summary_path):
+        try:
+            with open(eval_summary_path, "r", encoding="utf-8") as f:
+                eval_summary = json.load(f)
+            meta = eval_summary.get("meta", {})
+            is_dry = meta.get("is_dry_run", True)
+            prov = meta.get("provider", "fake")
+            if not is_dry and prov not in ("fake", "mock"):
+                is_real_run = True
+                run_message = f"Live Evaluation Run ({prov} / {meta.get('model')})"
+            else:
+                is_real_run = False
+                run_message = "No real evaluation run yet (Dry-run / Synthetic baseline data only)"
+        except Exception:
+            eval_summary = {}
+
+    # 2. Token Budget Gauge
+    used_tokens, max_budget = get_daily_token_usage()
+    percent_budget = round((used_tokens / max_budget) * 100, 1) if max_budget > 0 else 0.0
+
+    # 3. Runbook Knowledge Base Health & Coverage
+    vs = get_vector_store()
+    chunk_count = vs.get_document_count()
+    runbooks_dir = os.path.join(os.path.dirname(__file__), "..", "runbooks")
+    runbook_files = []
+    if os.path.exists(runbooks_dir):
+        for fname in sorted(os.listdir(runbooks_dir)):
+            if fname.endswith(".md"):
+                fpath = os.path.join(runbooks_dir, fname)
+                runbook_files.append({
+                    "name": html.escape(fname),
+                    "size_bytes": os.path.getsize(fpath),
+                })
+
+    # 4. Recent Audit Log (Last 10 events, fully escaped & redacted)
+    es = get_event_store()
+    events = es.list_events(limit=10)
+    audit_log = []
+    sensitive_keys = {"api_key", "key", "secret", "password", "prompt", "system_prompt", "token"}
+
+    for ev in events:
+        # Sanitize and redact inputs
+        clean_inputs = {}
+        if isinstance(ev.inputs, dict):
+            for k, v in ev.inputs.items():
+                if any(sk in k.lower() for sk in sensitive_keys):
+                    clean_inputs[html.escape(str(k))] = "[REDACTED]"
+                else:
+                    clean_inputs[html.escape(str(k))] = html.escape(str(v)[:100])
+
+        # Sanitize and redact results
+        clean_results = {}
+        if isinstance(ev.results, dict):
+            for k, v in ev.results.items():
+                if any(sk in k.lower() for sk in sensitive_keys):
+                    clean_results[html.escape(str(k))] = "[REDACTED]"
+                else:
+                    clean_results[html.escape(str(k))] = html.escape(str(v)[:100])
+
+        audit_log.append({
+            "id": ev.id,
+            "event_type": html.escape(ev.type),
+            "topology_name": html.escape(ev.topology_name),
+            "timestamp": ev.timestamp,
+            "duration_ms": round(ev.compute_time_ms, 2),
+            "inputs": clean_inputs,
+            "results": clean_results,
+            "verifier_status": "verified" if ev.type in ("shortest_path", "compare_algorithms", "max_flow", "apply_mitigation") else "audit_logged",
+        })
+
+    has_plot = os.path.exists(os.path.join(os.path.dirname(__file__), "..", "eval", "results", "eval_comparison.png"))
+
+    return jsonify({
+        "status": "success",
+        "is_real_run": is_real_run,
+        "run_message": run_message,
+        "evaluation_summary": eval_summary,
+        "has_comparison_plot": has_plot,
+        "token_budget": {
+            "used": used_tokens,
+            "limit": max_budget,
+            "percent": percent_budget,
+            "remaining": max(0, max_budget - used_tokens),
+        },
+        "runbook_coverage": {
+            "total_chunks": chunk_count,
+            "runbook_count": len(runbook_files),
+            "runbooks": runbook_files,
+            "status": "healthy",
+        },
+        "audit_log": audit_log,
+    })
+
+
+@app.route("/api/llmops/plot", methods=["GET"])
+def get_llmops_plot_api():
+    """Serve the generated evaluation comparison chart."""
+    img_path = os.path.join(os.path.dirname(__file__), "..", "eval", "results", "eval_comparison.png")
+    if not os.path.exists(img_path):
+        return jsonify({"error": "Evaluation comparison image not generated yet."}), 404
+    return send_file(img_path, mimetype="image/png")
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)

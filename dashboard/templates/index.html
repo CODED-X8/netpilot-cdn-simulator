@@ -29,6 +29,9 @@
       <button id="btn-open-mitigations" class="btn btn-secondary" style="border-color: #10b981; color: #34d399;">
         💡 Mitigations
       </button>
+      <button id="btn-open-llmops" class="btn btn-secondary" style="border-color: #6366f1; color: #818cf8;">
+        📈 LLMOps
+      </button>
       <button id="btn-open-chat" class="btn btn-primary" style="background: linear-gradient(135deg, #8b5cf6, #3b82f6);">
         🤖 NetPilot Copilot
       </button>
@@ -581,6 +584,102 @@
         <div id="mitigations-table-container" style="overflow-x: auto;">
           <div style="color: var(--text-muted); font-size: 0.8rem; text-align: center; padding: 20px;">
             Select a goal and click "Simulate Candidates" to evaluate options.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LLMOps & Evaluation Benchmark Modal -->
+  <div id="llmops-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-container" style="max-width: 900px; max-height: 88vh;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 1.2rem;">📈</span>
+          <h3 style="margin: 0; font-size: 1.05rem;">LLMOps & Evaluation Benchmark</h3>
+        </div>
+        <button id="btn-close-llmops" class="btn-close">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 16px; overflow-y: auto;">
+        <!-- Top Stats Row: Token Budget + Runbook Health -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px;">
+          <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 12px;">
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 6px; display: flex; justify-content: space-between;">
+              <span>Daily Token Budget (UTC)</span>
+              <strong id="llmops-token-stats">0 / 100,000</strong>
+            </div>
+            <div style="background: #1e293b; border-radius: 4px; height: 10px; overflow: hidden;">
+              <div id="llmops-token-bar" style="background: linear-gradient(90deg, #3b82f6, #8b5cf6); height: 100%; width: 0%;"></div>
+            </div>
+            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 6px;">
+              Resets at 00:00 UTC &bull; Limit: 100k tokens/day
+            </div>
+          </div>
+
+          <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 12px;">
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 6px; display: flex; justify-content: space-between;">
+              <span>Knowledge Base & Runbooks</span>
+              <span id="llmops-rag-status" class="badge badge-success" style="font-size: 0.7rem;">Healthy</span>
+            </div>
+            <div style="font-size: 0.82rem; font-weight: bold;" id="llmops-rag-stats">
+              Loading runbooks...
+            </div>
+            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 6px;">
+              SQLite vector store &bull; Cosine similarity embeddings
+            </div>
+          </div>
+        </div>
+
+        <!-- Benchmark Comparison Table -->
+        <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h4 style="margin: 0; font-size: 0.92rem;">Configuration Benchmark Comparison (Test Set)</h4>
+            <span id="llmops-run-badge" class="badge badge-warning" style="font-size: 0.72rem;">No real evaluation run yet</span>
+          </div>
+
+          <div id="llmops-comparison-table-container" style="overflow-x: auto;">
+            <table class="benchmark-table" style="width: 100%; font-size: 0.78rem;">
+              <thead>
+                <tr>
+                  <th>Configuration</th>
+                  <th>Accuracy</th>
+                  <th>Tool Match</th>
+                  <th>Hallucination</th>
+                  <th>p50 Latency</th>
+                  <th>p95 Latency</th>
+                  <th>Cost / 1k</th>
+                </tr>
+              </thead>
+              <tbody id="llmops-comparison-tbody">
+                <tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 12px;">Loading benchmark data...</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div id="llmops-plot-container" style="margin-top: 14px; text-align: center; display: none;">
+            <img id="llmops-plot-img" src="" alt="Evaluation Comparison Plot" style="max-width: 100%; border-radius: 6px; border: 1px solid var(--border);" />
+          </div>
+        </div>
+
+        <!-- Audit Log Section -->
+        <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 14px;">
+          <h4 style="margin: 0 0 10px 0; font-size: 0.92rem;">Recent Audit Log (Last 10 Tool Executions)</h4>
+          <div style="overflow-x: auto;">
+            <table class="benchmark-table" style="width: 100%; font-size: 0.75rem;">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Event Type</th>
+                  <th>Topology</th>
+                  <th>Compute (ms)</th>
+                  <th>Sanitized Inputs</th>
+                  <th>Verifier</th>
+                </tr>
+              </thead>
+              <tbody id="llmops-audit-tbody">
+                <tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 10px;">Loading audit logs...</td></tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>

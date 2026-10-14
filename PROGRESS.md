@@ -168,3 +168,44 @@ This document tracks the progress of each milestone in the Mini CDN Routing Simu
   - Run `pytest -v tests/test_mitigations.py tests/`
   - Start `python dashboard/app.py`, open `http://localhost:5000`, click "💡 Mitigations" in navbar, select "Maximize Throughput", click "Simulate Mitigations", and inspect ranked proposals.
 - **Known issues:** None.
+
+---
+
+## Milestone M8: Evaluation Harness and LLMOps Panel
+- **Status:** Complete (Tag: `m8`)
+- **What was done:**
+  - `eval/generator.py`:
+    - Programmatically generates 50 question templates across 7 categories (`shortest_path`, `compare_algorithms`, `what_if`, `max_flow`, `find_bottleneck`, `search_history`, `destructive_actions`).
+    - Ground truth computed directly from custom Python engines (`routing/bellman_ford.py`, `routing/floyd_warshall.py`, `routing/max_flow.py`, `rag/vector_store.py`).
+    - 2-3 phrasings generated per template.
+    - Dataset split into 15 dev and 35 test templates, with reporting strictly evaluated on the test set.
+    - Plain-LLM baseline context receives full serialized topology text description.
+  - `eval/evaluator.py`:
+    - Offline evaluation runner evaluating 4 distinct configurations:
+      1. Plain LLM (full topology serialized as text in prompt, no tools, no RAG)
+      2. LLM + RAG (runbooks and documentation only, no execution tools)
+      3. LLM + Tools (execution tools only, no RAG or grounding verifier)
+      4. Full System (LLM + Tools + RAG + Number Grounding Verifier)
+    - 3 runs per template across the 35 test templates (420 evaluation queries total).
+    - Scoring rules: 1% tolerance for floating-point numbers; exact matching for integers and node/edge sets; citation validation for runbooks; confirmation gate verification for destructive actions.
+    - Hallucination detection: tracks any number in the generated answer not present in the configuration's input context or ground truth.
+    - Bypasses app rate limits and daily budget; supports `--dry-run`, `--runs N`, `--limit N`, `--spend-cap N`, and `--resume` flags.
+    - Exports: `eval/results/eval_raw_responses.jsonl`, `eval/results/eval_results.csv`, `eval/results/eval_summary.json`, `eval/results/eval_summary.md`, and Matplotlib chart `eval/results/eval_comparison.png`.
+  - `dashboard/app.py`:
+    - Added `GET /api/llmops/stats` endpoint returning evaluation benchmark findings, token budget status, runbook knowledge base coverage, and sanitized audit log (last 10 events with HTML escaping and sensitive key redaction).
+    - Added `GET /api/llmops/plot` serving `eval_comparison.png`.
+  - `dashboard/templates/index.html` & `dashboard/static/js/app.js`:
+    - Added "📈 LLMOps" nav button and comprehensive LLMOps Modal.
+    - Token budget progress bar (used vs 100k daily limit).
+    - Runbook health badge and indexed chunk counter.
+    - 4-configuration benchmark table with dry-run notice if no live LLM run has executed.
+    - Embedded comparison chart.
+    - Sanitized, escaped audit log table.
+  - `tests/test_eval.py`: 5 tests verifying question generation, scoring rules, hallucination detection, destructive action gates, dry-run artifacts, and LLMOps REST endpoints.
+  - Test suite: **66 passing tests** (original 20 untouched + 46 new).
+- **How to verify:**
+  - Run `pytest -v tests/test_eval.py tests/`
+  - Run `python -m eval.evaluator --dry-run --runs 1 --limit 3` to test evaluation runner.
+  - Start `python dashboard/app.py`, open `http://localhost:5000`, click "📈 LLMOps" in navbar to view benchmark table, plot, token budget, and audit log.
+- **Known issues:** None.
+

@@ -1,0 +1,55 @@
+{
+  "meta": {
+    "date": "2026-10-14",
+    "provider": "fake",
+    "model": "fake-eval-model",
+    "is_dry_run": true,
+    "total_templates": 35,
+    "runs_per_template": 3,
+    "total_evaluated_queries": 420
+  },
+  "plain_llm": {
+    "count": 105,
+    "accuracy_percent": 5.71,
+    "tool_selection_accuracy_percent": 0.0,
+    "hallucination_rate_percent": 31.58,
+    "latency_p50_ms": 85.1,
+    "latency_p95_ms": 85.2,
+    "latency_p99_ms": 85.2,
+    "total_cost_usd": 0.0299,
+    "cost_per_1k_usd": 0.285
+  },
+  "llm_rag": {
+    "count": 105,
+    "accuracy_percent": 13.33,
+    "tool_selection_accuracy_percent": 17.14,
+    "hallucination_rate_percent": 0.0,
+    "latency_p50_ms": 115.9,
+    "latency_p95_ms": 117.5,
+    "latency_p99_ms": 118.4,
+    "total_cost_usd": 0.0061,
+    "cost_per_1k_usd": 0.0585
+  },
+  "llm_tools": {
+    "count": 105,
+    "accuracy_percent": 61.9,
+    "tool_selection_accuracy_percent": 71.43,
+    "hallucination_rate_percent": 0.0,
+    "latency_p50_ms": 89.8,
+    "latency_p95_ms": 287.2,
+    "latency_p99_ms": 300.3,
+    "total_cost_usd": 0.0077,
+    "cost_per_1k_usd": 0.073
+  },
+  "full_system": {
+    "count": 105,
+    "accuracy_percent": 61.9,
+    "tool_selection_accuracy_percent": 71.43,
+    "hallucination_rate_percent": 0.0,
+    "latency_p50_ms": 100.8,
+    "latency_p95_ms": 303.3,
+    "latency_p99_ms": 304.5,
+    "total_cost_usd": 0.0098,
+    "cost_per_1k_usd": 0.093
+  }
+}

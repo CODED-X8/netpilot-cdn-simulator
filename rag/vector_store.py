@@ -85,6 +85,24 @@ class VectorStore:
             )
             conn.commit()
 
+    def has_chunk(self, chunk_id: str) -> bool:
+        """Check if a chunk id exists in the documents table."""
+        with self._get_connection() as conn:
+            row = conn.execute("SELECT 1 FROM documents WHERE id = ?", (chunk_id,)).fetchone()
+            return row is not None
+
+    def has_document(self, filename: str) -> bool:
+        """Check if any chunk belongs to the specified filename."""
+        with self._get_connection() as conn:
+            row = conn.execute("SELECT 1 FROM documents WHERE chunk_path LIKE ?", (f"%{filename}%",)).fetchone()
+            return row is not None
+
+    def get_document_count(self) -> int:
+        """Get total number of indexed document chunks."""
+        with self._get_connection() as conn:
+            row = conn.execute("SELECT COUNT(*) as cnt FROM documents").fetchone()
+            return int(row["cnt"]) if row else 0
+
     def search(
         self,
         query: str,
