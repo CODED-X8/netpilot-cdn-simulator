@@ -1,18 +1,51 @@
-# Mini CDN Routing Simulator (DAA Course Project — Review 1)
+# Mini CDN Routing Simulator & NetPilot AI Copilot
 
-A simulator modeling how Content Delivery Networks (CDNs) make optimal edge routing decisions using fundamental graph algorithms implemented from scratch in Python.
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Tests: 66 Passed](https://img.shields.io/badge/tests-66%20passed-brightgreen.svg)]()
+[![Docker: Ready](https://img.shields.io/badge/docker-multi--stage-blue.svg)]()
+
+A high-performance simulator and autonomous AI Copilot system modeling how Content Delivery Networks (CDNs) make optimal edge routing, capacity allocation, fault recovery, and incident mitigation decisions. Built for the **Design and Analysis of Algorithms (DAA)** curriculum.
+
+All core graph routing, network flow, and simulation engines are implemented **completely from scratch in pure Python** with **zero external routing libraries** (NetworkX is restricted strictly to cross-validation tests).
 
 ---
 
-## 📌 Context & Scope (Review 1)
+## 🌟 Key Capabilities
 
-Modern CDNs (e.g., Cloudflare, Akamai, Fastly) route incoming user traffic across a distributed topology composed of **Origin Servers**, **Edge POP Servers**, and **User Regions**. Communication links are characterized by **Latency** (ms) and **Bandwidth Capacity** (Mbps).
+### 1. Core Algorithmic Routing Engine (Review 1)
+- **Bellman-Ford (Single-Source Shortest Path)**: Relaxations over $|V|-1$ passes, negative-weight cycle detection, and operation counters validating theoretical $O(|V| \cdot |E|)$.
+- **Floyd-Warshall (All-Pairs Shortest Path)**: Dynamic programming matrix computation with predecessor path reconstruction and operation counters validating theoretical $O(|V|^3)$.
+- **Empirical Benchmarking Suite**: Automated scalability analysis across $N \in [10, 200]$ with generated publication-quality plots.
+- **Interactive Dark Dashboard**: Vis.js force-directed canvas with multi-hop route highlighting, latency/hop metrics, and link failure simulation.
 
-In this foundational phase (Review 1), the system implements and cross-validates two classic shortest-path routing algorithms from scratch:
-1. **Bellman-Ford Algorithm** (Single-Source Shortest Path — SSSP)
-2. **Floyd-Warshall Algorithm** (All-Pairs Shortest Path — APSP)
+### 2. Network Flow & Max Flow Engine (Review 2)
+- **Edmonds-Karp Algorithm**: Shortest augmenting path discovery via Breadth-First Search (BFS) on residual graph $G_f$ in $O(|V| \cdot |E|^2)$.
+- **Ford-Fulkerson Algorithm**: Depth-First Search (DFS) augmenting path algorithm for theoretical comparison.
+- **Multi-Sink Flow Allocation**: Virtual super-sink routing simultaneously delivering traffic from origin to all edge servers.
+- **Min-Cut Bottleneck Theorem**: Identifies exact capacity-limiting cut edges and total min-cut bandwidth.
 
-Neither library calls (e.g., NetworkX, SciPy) nor prebuilt graph frameworks are used for the routing engines. Both algorithms are instrumented with **elementary operation counters** to empirically validate their theoretical asymptotic complexities ($O(V \cdot E)$ vs $O(V^3)$).
+### 3. NetPilot Autonomous AI Copilot (Review 2)
+- **Zero-Hallucination ReAct Architecture**: The LLM *never* computes routes, flows, or metrics in its head. It calls deterministic Python tools wrapping our custom engines and explains the tool outputs.
+- **Anti-Hallucination Grounding Verifiers**:
+  - **Number Grounding Verifier**: Regex validation ensuring every number in the LLM's answer is mathematically grounded in tool outputs within 1% tolerance.
+  - **Event ID Citation Verifier**: Ensures incident citations exist in SQLite event store telemetry.
+- **Destructive Confirmation Gate**: Actions that mutate live networks (`kill_edge`, `reset_network`, `apply_mitigation`) require explicit user confirmation.
+- **RAG Knowledge Base**: SQLite vector store with pure Python cosine similarity indexing 5 operational runbooks.
+- **Incident Postmortems**: Automated Markdown postmortems (Summary, Timeline, Impact, Root Cause, Mitigations) exportable as `.md`.
+- **Propose & Simulate Mitigations**: Simulates candidate actions on isolated copies (`graph.clone()`), discards invalid proposals, and deterministically ranks by empirical metric deltas.
+
+### 4. Evaluation Harness & LLMOps Panel (Review 2)
+- **Offline Evaluation Runner** (`eval/evaluator.py`):
+  - 50 programmatic templates (15 dev, 35 test) evaluated across 4 configurations over 3 runs (420 test queries):
+    1. *Plain LLM* (receives full serialized topology as text in prompt, no tools, no RAG)
+    2. *LLM + RAG* (runbooks only, no execution tools)
+    3. *LLM + Tools* (custom engines, no RAG or grounding verifier)
+    4. *Full NetPilot* (Tools + RAG + Number Grounding Verifier)
+  - Scoring: 1% numeric tolerance, exact integer/set match, citation existence check, destructive gate verification.
+  - Hallucination tracking: detects any ungrounded numbers across all 4 configurations.
+  - Saves CSV, raw JSONL logs, Markdown summary, and Matplotlib comparison plots.
+- **LLMOps Dashboard Panel**: Real-time token budget gauge (100k UTC limit), runbook knowledge base coverage, benchmark comparison table, and sanitized audit log.
 
 ---
 
@@ -21,245 +54,185 @@ Neither library calls (e.g., NetworkX, SciPy) nor prebuilt graph frameworks are 
 ```
 DAA_PROJ/
 ├── graph/                      # Directed graph data model & generators
-│   ├── __init__.py
-│   ├── network.py              # Node, Edge, and Graph data structures
-│   └── generator.py            # Hierarchical CDN & random benchmark topologies
-├── routing/                    # Core algorithmic routing engines (from scratch)
-│   ├── __init__.py
+│   ├── network.py              # Node, Edge, and Graph structures (from scratch)
+│   └── generator.py            # Hierarchical CDN & benchmark generators
+├── routing/                    # Algorithmic routing & flow engines (from scratch)
 │   ├── bellman_ford.py         # Bellman-Ford SSSP with negative cycle detection
-│   └── floyd_warshall.py       # Floyd-Warshall APSP with path reconstruction
-├── tests/                      # Automated validation suite (pytest)
-│   ├── __init__.py
-│   ├── test_graph.py           # Graph operations & mutation tests
-│   ├── test_handcrafted.py     # 6-node hand-calculated ground-truth verification
-│   ├── test_cross_validation.py# Cross-algorithm assertions across topologies
-│   └── test_negative_cycle.py  # Negative cycle detection assertions
-├── benchmarks/                 # Empirical complexity benchmarking suite
-│   ├── __init__.py
-│   ├── benchmark.py            # Benchmark runner (N = 10 to 200)
-│   └── results/
-│       ├── benchmark_results.csv   # Empirical metrics (wall-clock time, ops)
-│       └── complexity_benchmark.png# Publication-quality complexity plots
+│   ├── floyd_warshall.py       # Floyd-Warshall APSP with path reconstruction
+│   └── max_flow.py             # Edmonds-Karp (BFS), Ford-Fulkerson (DFS), Min-Cut
+├── services/                   # Functional service layer
+│   ├── network_service.py      # Session-scoped graph lifecycle management
+│   ├── topology_service.py     # JSON/CSV validator & sample loader
+│   ├── postmortem_service.py   # Incident postmortem generator
+│   └── mitigation_service.py   # Mitigation simulation on isolated graph copies
+├── storage/                    # Persistence layer
+│   └── event_store.py          # SQLite event store (network_events.db)
+├── rag/                        # Retrieval-Augmented Generation
+│   ├── embedder.py             # DeterministicFakeEmbedder & OpenAI embedder
+│   └── vector_store.py         # SQLite vector store with pure Python cosine similarity
+├── runbooks/                   # Operational SOP runbooks
+│   ├── link_failure_runbook.md
+│   ├── congestion_runbook.md
+│   ├── cache_miss_storm_runbook.md
+│   ├── ddos_mitigation_runbook.md
+│   └── bad_topology_upload_runbook.md
+├── copilot/                    # NetPilot AI Copilot
+│   ├── agent.py                # ReAct loop, delimiter isolation, confirmation gate
+│   ├── tools.py                # Pydantic schemas & tool router
+│   ├── verifier.py             # Number grounding & event citation validators
+│   ├── guardrails.py           # Rate limiter (10 req/min) & token budget (100k UTC)
+│   └── llm_provider.py         # OpenAI-compatible client & FakeLLMProvider
+├── eval/                       # Evaluation & LLMOps Harness
+│   ├── generator.py            # 50 programmatic questions (15 dev, 35 test)
+│   ├── evaluator.py            # 4-configuration evaluation runner & plotting
+│   └── results/                # CSV, JSON, Markdown, and Matplotlib plot outputs
+├── benchmarks/                 # Empirical complexity benchmarking
+│   └── benchmark.py            # Empirical runtime & operation counter runner
 ├── dashboard/                  # Interactive visual dashboard
 │   ├── app.py                  # Flask web backend & REST API
-│   ├── templates/
-│   │   └── index.html          # Interactive interface
-│   └── static/
-│       ├── css/style.css       # Clean dark-mode stylesheet
-│       └── js/app.js           # Vis.js network rendering & dynamic rerouting
-├── requirements.txt            # Minimal runtime dependencies (Flask, Matplotlib, Pytest)
-├── ROADMAP.md                  # Stubs for future phases (Max-Flow, Set Cover, Load Balancing)
-└── README.md                   # Complete documentation & execution guide
+│   ├── templates/index.html    # Single-page interface & modals
+│   └── static/                 # Vis.js network visualization & CSS
+├── tests/                      # Automated pytest test suite (66 tests)
+├── Dockerfile                  # Production multi-stage Docker container
+├── docker-compose.yml          # Containerized deployment
+├── ARCHITECTURE.md             # Detailed system architecture document
+├── PROGRESS.md                 # Milestone delivery audit log (M1 to M9)
+└── ROADMAP.md                  # Evolution roadmap & future stretch goals
 ```
-
----
-
-## ⚙️ Algorithms & Theoretical Complexity
-
-| Metric / Property | Bellman-Ford Algorithm | Floyd-Warshall Algorithm |
-| :--- | :--- | :--- |
-| **Scope** | Single-Source Shortest Path (SSSP) | All-Pairs Shortest Path (APSP) |
-| **Time Complexity** | $O(|V| \cdot |E|)$ | $O(|V|^3)$ |
-| **Space Complexity** | $O(|V|)$ | $O(|V|^2)$ |
-| **Edge Weights** | Arbitrary real numbers | Arbitrary real numbers |
-| **Negative Cycle Handling** | Detects cycles reachable from source via $|V|$-th pass | Detects cycles via negative diagonal entries $D[i][i] < 0$ |
-| **Path Reconstruction** | Predecessor map $\pi[v]$ | Successor/intermediate matrix $\text{next}[i][j]$ |
-| **Use Case in CDN** | On-demand path finding from a specific user region to candidate POPs | Global routing table precomputation across all nodes in the CDN backbone |
-
-### 1. Bellman-Ford Algorithm
-- Iteratively relaxes all directed edges $|V| - 1$ times.
-- On the $|V|$-th iteration, if any edge can still be relaxed, a **negative-weight cycle** exists.
-- In `routing/bellman_ford.py`, this raises a specialized `NegativeCycleException`.
-- Each relaxation comparison increments the internal operation counter by 1.
-
-### 2. Floyd-Warshall Algorithm
-- Employs dynamic programming using the recurrence:
-  $$D^{(k)}[i][j] = \min\left(D^{(k-1)}[i][j],\; D^{(k-1)}[i][k] + D^{(k-1)}[k][j]\right)$$
-- Tracks a companion predecessor/next matrix:
-  $$\text{next}[i][j] = \text{next}[i][k] \quad \text{when } D[i][k] + D[k][j] < D[i][j]$$
-- Operates in three nested loops from $0$ to $|V|-1$, producing strictly $|V|^3$ elementary comparisons.
 
 ---
 
 ## 🚀 Quickstart & Setup
 
-### 1. Environment Setup
-Clone or navigate to the repository directory and create a virtual environment:
+### 1. Local Environment Setup
 
 ```bash
-# Navigate to project root
+# 1. Navigate to project root
 cd DAA_PROJ
 
-# Create Python virtual environment
+# 2. Create Python virtual environment
 python3 -m venv .venv
 
-# Activate environment
+# 3. Activate environment
 source .venv/bin/activate
 
-# Install dependencies
+# 4. Install dependencies
 pip install -r requirements.txt
 ```
 
----
+### 2. Configure Environment Variables (Optional)
 
-### 2. Running Automated Tests
-Run the comprehensive test suite with `pytest`:
-
-```bash
-pytest -v tests/
-```
-
-**What is tested:**
-- `test_graph.py`: Graph edge addition, node classifications, edge removal (failure simulation), and weight updates (congestion simulation).
-- `test_handcrafted.py`: A hand-calculated 6-node topology where shortest paths and distances are verified against exact mathematical ground truth.
-- `test_cross_validation.py`: Asserts that Bellman-Ford and Floyd-Warshall yield identical distance matrices and optimal edge selections on random topologies.
-- `test_negative_cycle.py`: Verifies that both algorithms correctly identify negative-weight cycles and raise `NegativeCycleException`.
-
----
-
-### 3. Running Complexity Benchmarks
-Execute the empirical benchmark script to test graph sizes from $N=10$ to $N=200$:
-
-```bash
-python benchmarks/benchmark.py
-```
-
-Outputs generated:
-- `benchmarks/results/benchmark_results.csv`: Measured wall-clock execution times and operation counts.
-- `benchmarks/results/complexity_benchmark.png`: High-resolution dual-panel matplotlib chart comparing empirical vs theoretical scaling.
-
-#### Empirical Benchmark Results Table:
-| $|V|$ (Nodes) | $|E|$ (Edges) | Bellman-Ford Time (ms) | Bellman-Ford Ops | Floyd-Warshall Time (ms) | Floyd-Warshall Ops |
-|:---:|:---:|:---:|:---:|:---:|:---:|
-| **10** | 27 | 0.03 ms | 276 | 0.10 ms | 1,000 |
-| **20** | 112 | 0.18 ms | 2,246 | 0.80 ms | 8,000 |
-| **50** | 645 | 2.44 ms | 32,266 | 12.57 ms | 125,000 |
-| **80** | 1,644 | 10.18 ms | 131,546 | 49.85 ms | 512,000 |
-| **120** | 3,680 | 42.45 ms | 441,600 | 167.08 ms | 1,728,000 |
-| **160** | 6,491 | 82.08 ms | 1,038,560 | 417.37 ms | 4,096,000 |
-| **200** | 10,148 | 151.45 ms | 2,029,733 | 784.83 ms | 8,000,000 |
-
-*Notice:* Floyd-Warshall operations scale precisely as $N^3$ ($200^3 = 8\times 10^6$), while Bellman-Ford scales strictly with $V \cdot E$.
-
----
-
-### 4. Running the Interactive Dashboard
-Launch the interactive Flask visualization dashboard:
-
-```bash
-python dashboard/app.py
-```
-
-Then open your browser and navigate to:
-```
-http://localhost:5000
-```
-
-#### Dashboard Features:
-1. **Interactive Topology Visualization (Vis.js)**:
-   - Gold Diamonds: Origin Data Centers
-   - Cyan Hexagons: Edge POP Servers
-   - Teal Circles: User Population Regions
-   - Edge labels indicate latency in milliseconds.
-2. **Click-to-Route**: Click any teal User Region node to immediately compute the shortest path to the lowest-latency Edge POP.
-3. **Algorithm Switching**: Toggle between Bellman-Ford and Floyd-Warshall to see empirical comparison of execution times and operation counts side-by-side.
-4. **Failure Simulation ("Kill Random Edge")**: Click the button to sever an active communication link. The system dynamically detects the failure, re-runs routing, and highlights the updated alternative path in real time.
-5. **Network Reset**: Instantly restores the network to baseline topology.
-
----
-
-## 🐳 Deployment & Production Setup
-
-The Mini CDN Routing Simulator and NetPilot Copilot are packaged as a production-ready, non-root, multi-stage Docker container with automated health checks, configurable guardrails, and persistent volume support.
-
-### 1. Environment Configuration
-
-Copy `.env.example` to `.env` and configure your API credentials and rate limits:
+Copy `.env.example` to `.env`:
 
 ```bash
 cp .env.example .env
 ```
 
-Key variables:
-- `LLM_API_KEY`: API key for OpenAI-compatible model (leave empty to run the simulator without AI copilot).
-- `LLM_BASE_URL`: API base URL (defaults to `https://api.openai.com/v1`, or local Ollama / vLLM).
-- `LLM_MODEL`: Target model (defaults to `gpt-4o-mini`).
-- `COPILOT_ENABLED`: Global kill switch (`true` or `false`). When `false`, copilot returns `503 Service Unavailable` while all routing engines operate normally.
-- `RATE_LIMIT_PER_MINUTE`: Maximum copilot queries per session per minute (default `10`, returns `429`).
-- `DAILY_TOKEN_BUDGET`: Cumulative daily token ceiling (default `100,000`, returns `429` on exhaustion).
+| Variable | Default | Purpose |
+| :--- | :--- | :--- |
+| `LLM_API_KEY` | *(unset)* | OpenAI / OpenRouter API Key. If unset, NetPilot safely uses offline `FakeLLMProvider`. |
+| `LLM_BASE_URL` | `https://api.openai.com/v1` | OpenAI-compatible endpoint. |
+| `LLM_MODEL` | `gpt-4o-mini` | Model name. |
+| `COPILOT_ENABLED` | `true` | Master kill switch for Copilot features. |
+| `DAILY_TOKEN_BUDGET`| `100000` | Daily token spend cap (resets 00:00 UTC). |
 
 ---
 
-### 2. Local Docker Run
+## 💻 Running the Application
 
-Build the multi-stage image and run as a non-root user:
-
+### 1. Launch Interactive Dashboard
 ```bash
-# Build the image
-docker build -t mini-cdn-simulator:latest .
+python dashboard/app.py
+```
+Open **[http://localhost:5000](http://localhost:5000)** in your browser:
+- **Shortest Path**: Trace lowest-latency routes using Bellman-Ford or Floyd-Warshall.
+- **Max Flow**: Run Edmonds-Karp with super-sink allocation and visualize min-cut bottlenecks.
+- **Fault Simulation**: Click "⚡ Kill Random Edge" to simulate outages and dynamic rerouting.
+- **Postmortem Generator**: Click "📋 Generate Incident Postmortem" and download `.md` reports.
+- **Mitigations Engine**: Click "💡 Mitigations" to evaluate topology upgrades on isolated graph copies.
+- **LLMOps Panel**: Click "📈 LLMOps" to inspect token budgets, runbook health, and benchmark findings.
+- **NetPilot Copilot**: Click "🤖 NetPilot Copilot" to converse with the autonomous network SRE.
 
-# Run with environment variables and healthcheck
-docker run -d \
-  --name cdn_simulator \
-  -p 5000:5000 \
-  --env-file .env \
-  mini-cdn-simulator:latest
+### 2. Run Offline Evaluation Benchmark
+```bash
+# Run complete offline evaluation on test set (35 templates × 3 runs = 420 queries)
+python -m eval.evaluator --dry-run --runs 3
 
-# Check container health status
-docker inspect --format='{{json .State.Health.Status}}' cdn_simulator
+# Test with a quick 3-question limit
+python -m eval.evaluator --dry-run --limit 3 --runs 1
+
+# Execute against a live LLM endpoint (requires LLM_API_KEY)
+python -m eval.evaluator --real-run --runs 3
 ```
 
+Results and comparison plots are saved directly to `eval/results/eval_comparison.png`.
+
+### 3. Run Algorithmic Complexity Benchmarks
+```bash
+python benchmarks/benchmark.py
+```
+Generates empirical CSV data and Matplotlib asymptotic complexity plots in `benchmarks/results/`.
+
 ---
 
-### 3. Docker Compose (Recommended)
+## 🧪 Automated Testing Suite
 
-Run the full stack with mounted persistent volume for the SQLite event store:
+The test suite includes **66 automated pytest tests** covering:
+- Graph data structures, mutations, dynamic link failures.
+- Handcrafted 6-node ground truth routing verification.
+- Cross-validation between Bellman-Ford, Floyd-Warshall, and NetworkX across 50 random topologies.
+- Negative cycle detection.
+- Edmonds-Karp and Ford-Fulkerson max flow cross-validation against NetworkX.
+- JSON/CSV topology uploads with row-numbered error detection.
+- Copilot ReAct agent loop, number grounding verifier, and destructive confirmation gate.
+- RAG runbook chunking, cosine similarity, delimiter isolation, and event citation verification.
+- Isolated mitigation simulations and deterministic metric ranking.
+- Evaluation harness, scoring rules, hallucination tracking, and LLMOps endpoints.
 
+To run the full suite:
 ```bash
-docker compose up -d --build
+pytest -v
 ```
 
-Access the dashboard at `http://localhost:5000`. To stop the service:
+All 66 tests execute in under 3 seconds with **100% pass rate**.
+
+---
+
+## 🐳 Docker Deployment
+
+The project includes a multi-stage Dockerfile and `docker-compose.yml`:
 
 ```bash
-docker compose down
+# Build and run with Docker Compose
+docker-compose up --build
+
+# Run in background
+docker-compose up -d
+
+# Stop container
+docker-compose down
 ```
+Access the dashboard at **[http://localhost:5000](http://localhost:5000)**.
 
 ---
 
-### 4. Free-Tier Cloud Deployments
+## 📊 Evaluation & LLMOps Findings
 
-#### A. Render (Web Service)
-1. Fork or push this repository to GitHub.
-2. In the [Render Dashboard](https://dashboard.render.com), create a new **Web Service**.
-3. Select your repository and choose **Docker** as the Environment.
-4. Set the Health Check Path to `/api/network`.
-5. Under **Environment Variables**, add `LLM_API_KEY`, `LLM_MODEL`, and other desired variables.
-6. Click **Create Web Service**.
+The offline evaluation harness evaluates 4 configurations across 420 test queries:
 
-#### B. Fly.io
-1. Install `flyctl` and authenticate (`fly auth login`).
-2. Run `fly launch` in the repository root. It will automatically detect `Dockerfile` and configure port `5000`.
-3. Set your secrets:
-   ```bash
-   fly secrets set LLM_API_KEY="your-key-here" COPILOT_ENABLED="true"
-   ```
-4. Deploy:
-   ```bash
-   fly deploy
-   ```
+| Configuration | Description | Ground-Truth Accuracy | Hallucination Rate | p50 Latency |
+| :--- | :--- | :---: | :---: | :---: |
+| **Plain LLM** | Receives full topology text in prompt; no tools | 5.7% | **31.6%** | 85 ms |
+| **LLM + RAG** | Access to runbooks only; no execution tools | 13.3% | 0.0% | 116 ms |
+| **LLM + Tools** | Access to custom Python routing/flow engines | **61.9%** | **0.0%** | 90 ms |
+| **Full NetPilot** | Tools + RAG + Number Grounding Verifier | **61.9%** | **0.0%** | 101 ms |
 
-#### C. Hugging Face Spaces
-1. Create a new Space on [Hugging Face](https://huggingface.co/spaces) and select the **Docker** SDK.
-2. In the Space repository settings, set Repository Secrets for `LLM_API_KEY`.
-3. Push the repository to the Space git remote. Port `5000` is exposed and served automatically.
+> [!NOTE]
+> The table above reflects the verified synthetic baseline dry run generated by `eval/evaluator.py`. When run with a production LLM API key, live scores are automatically recorded with model metadata in `eval/results/eval_summary.json` and presented in the LLMOps modal.
 
 ---
 
-## 🎯 Review Presentation Guide (Key Talking Points)
-
-1. **Academic Rigor**: Emphasize that all algorithms were written from scratch with no third-party routing libraries used.
-2. **Cross-Validation**: Explain how `test_handcrafted.py` verifies mathematical ground truth, while `test_cross_validation.py` asserts algorithm equivalence across randomized topologies.
-3. **Empirical vs Theoretical**: Present `complexity_benchmark.png` and explain how measuring atomic comparisons directly validates asymptotic Big-$O$ bounds independently of hardware noise.
-4. **CDN Problem Formulation**: Highlight that the goal is solving nearest-edge discovery for client populations rather than generic arbitrary routing.
-5. **Extensibility**: Reference [ROADMAP.md](ROADMAP.md) to show how Review 1 lays the foundation for Maximum Flow (Review 2), Set Cover Caching (Review 3), and Dynamic Load Balancing (Final).
+## 📚 Documentation Links
+- **[ARCHITECTURE.md](ARCHITECTURE.md)**: Detailed system architecture, data flow diagrams, SQLite schemas, RAG isolation, and guardrails.
+- **[PROGRESS.md](PROGRESS.md)**: Chronological delivery audit log across all 9 milestones (M1 to M9).
+- **[ROADMAP.md](ROADMAP.md)**: Review 1 and 2 completion status and future stretch goals (Live Mode traceroute, Karger's min-cut, Set Cover caching).

@@ -1,7 +1,7 @@
-# Project Roadmap: Mini CDN System
+# Project Roadmap: Mini CDN System & NetPilot
 
 > **Course:** Design and Analysis of Algorithms (DAA)  
-> **Status:** Review 1 (Phase 1) Completed
+> **Status:** Review 1 & Review 2 Completed
 
 ---
 
@@ -11,69 +11,86 @@
 +-------------------------------------------------------------------------+
 |                  Mini CDN Distributed Routing Platform                  |
 +-------------------------------------------------------------------------+
-                                    |
-     +------------------------------+------------------------------+
-     |                              |                              |
-[Completed]                    [Phase 2]                      [Phase 3 & 4]
-Review 1: Routing Engine       Review 2: Flow & Bandwidth     Review 3: Caching & Load
-- Directed Graph Model         - Ford-Fulkerson (DFS)         - Greedy Set Cover
-- Bellman-Ford (SSSP)          - Edmonds-Karp (BFS)           - Consistent Hashing
-- Floyd-Warshall (APSP)        - Max Bandwidth Allocation     - Randomized Load Balancing
-- Negative Cycle Detection     - Residual Graphs & Cuts       - Global Edge Orchestrator
-- Empirical Benchmarks         - Bottleneck Edge Detection
+                                    │
+     ┌──────────────────────────────┼──────────────────────────────┐
+     │                              │                              │
+[Completed - Review 1]        [Completed - Review 2]         [Future Stretch Goals]
+Routing Foundation            NetPilot Autonomous AI         Advanced Algorithms
+- Directed Graph Model        - Edmonds-Karp Max Flow        - Live Mode (ICMP / Traceroute)
+- Bellman-Ford (SSSP)         - Ford-Fulkerson Flow (DFS)    - Karger's Randomized Min-Cut
+- Floyd-Warshall (APSP)       - Super-Sink & Min-Cut         - Greedy Set Cover Edge Placement
+- Negative Cycle Detection    - RAG Operational Runbooks     - Consistent Hashing Content Router
+- Empirical Benchmarks        - Grounding Verifiers          - Multi-Agent Autonomous SRE
+- Vis.js Dark Dashboard       - Postmortem & Mitigations
+                              - Offline Evaluation Harness
 ```
 
 ---
 
-## Detailed Phase Breakdown
+## Detailed Milestone Status
 
-### Phase 1: Core Routing Foundation (Review 1 - CURRENT)
-- [x] **Directed Weighted Graph**: Node types (`origin`, `edge_server`, `user_region`), failure simulation via `remove_edge`, and congestion updates via `update_edge_weight`.
-- [x] **Bellman-Ford SSSP (from scratch)**: Arbitrary weight handling, relaxation over $|V|-1$ passes, negative-weight cycle detection, and empirical operation counters.
-- [x] **Floyd-Warshall APSP (from scratch)**: All-pairs distance and path reconstruction matrices with $O(V^3)$ comparisons tracking.
-- [x] **Correctness & Cross-Validation**: Hand-calculated 6-node ground-truth assertions, cross-algorithm validation on random topologies, and negative cycle validation.
-- [x] **Empirical Benchmarking**: Scalability analysis across $N \in [10, 200]$ validating theoretical $O(V \cdot E)$ vs $O(V^3)$ curves via CSV and matplotlib visualizations.
-- [x] **Interactive Dashboard**: Vis.js network visualization, click-to-route path tracing, dynamic link failure simulation, and live telemetry.
+### Review 1: Core Routing Engine (Completed)
+- [x] **Directed Weighted Graph Model**: Custom Node, Edge, and Graph data structures with dynamic link failure (`remove_edge`) and congestion (`update_edge_weight`).
+- [x] **Bellman-Ford SSSP (from scratch)**: Arbitrary weight support, negative-weight cycle detection, and operation counters tracking theoretical $O(V \cdot E)$.
+- [x] **Floyd-Warshall APSP (from scratch)**: Dynamic programming matrix computation with path reconstruction and operation counters tracking theoretical $O(V^3)$.
+- [x] **Cross-Validation Suite**: Handcrafted 6-node ground-truth assertions and automated cross-validation on 50 random topologies.
+- [x] **Interactive Dashboard**: Vis.js canvas with shortest-path rendering, multi-hop routing demonstrations, fault injection, and benchmark viewer.
+
+### Review 2: NetPilot AI Copilot, Max Flow & LLMOps (Completed)
+- [x] **Milestone M1 — Max Flow & Min-Cut Engine**:
+  - Edmonds-Karp (BFS augmenting paths on residual graph $G_f$, $O(V \cdot E^2)$).
+  - Ford-Fulkerson (DFS augmenting paths, $O(E \cdot |f^*|)$).
+  - Multi-sink routing via virtual super-sink.
+  - Min-cut bottleneck capacity and cut edge discovery.
+  - SQLite persistent event store (`network_events.db`).
+- [x] **Milestone M2 — User Topologies & Validation**:
+  - JSON & CSV topology parser supporting up to 200 nodes / 2000 edges.
+  - Structural validation with row-numbered error messages.
+  - Prebuilt sample topologies: Campus LAN, Cloud Multi-Region, Hierarchical CDN.
+- [x] **Milestone M3 — NetPilot AI Copilot Architecture**:
+  - ReAct agent loop (5 iterations max) with OpenAI-compatible API and offline `FakeLLMProvider`.
+  - Pydantic schema validation for all copilot tools (`shortest_path`, `compare_algorithms`, `what_if`, `max_flow`, `find_bottleneck`).
+  - Destructive action confirmation gates (`kill_edge`, `reset_network`).
+  - Number grounding verifier ensuring answers contain only verified tool outputs.
+- [x] **Milestone M4 — Guardrails & Production Deployment**:
+  - In-memory sliding-window rate limiter (10 req/min per session).
+  - UTC daily token budget manager (100k tokens/day).
+  - Master kill switch (`COPILOT_ENABLED`).
+  - Multi-stage Dockerfile, docker-compose, and GitHub Actions CI.
+- [x] **Milestone M5 — RAG Runbooks & History Search**:
+  - SQLite vector store with pure Python cosine similarity search.
+  - 5 operational markdown runbooks chunked and indexed.
+  - Strict delimiter isolation (`=== RETRIEVED CONTEXT ===`) to prevent prompt injections.
+  - Event ID citation grounding verifier.
+- [x] **Milestone M6 — Incident Postmortem Generator**:
+  - Automated structured Markdown postmortem generator (Summary, Timeline, Impact, Root Cause, Mitigations).
+  - Strictly grounded in SQLite event store telemetry; exportable as `.md`.
+- [x] **Milestone M7 — Propose, Simulate, Verify Mitigations**:
+  - Isolated graph copy simulation (`graph.clone()`) leaving live graph 100% untouched.
+  - Discarding of invalid candidates and deterministic ranking by measured empirical metric deltas.
+  - User confirmation gate before applying mitigations to the active network.
+- [x] **Milestone M8 — Evaluation Harness & LLMOps Panel**:
+  - 50 programmatic questions (15 dev, 35 test) evaluated across 4 configurations (Plain LLM, LLM+RAG, LLM+Tools, Full NetPilot) over 3 runs (420 test queries).
+  - Scoring rules: 1% numeric tolerance, exact integer/set match, runbook citation check, destructive action gate check.
+  - Hallucination tracking across all configurations.
+  - LLMOps Dashboard Panel (`GET /api/llmops/stats`, token budget gauge, runbook coverage, and sanitized audit log).
 
 ---
 
-### Phase 2: Bandwidth Constraints & Maximum Flow (Review 2)
-*Focus: Ensuring network links can support client demand volumes without saturation.*
+## Future Stretch Goals (Post-Review 2)
 
-- [ ] **Capacity-Constrained Edge Model**:
-  - Augment edges with capacity $c(u, v)$ and flow $f(u, v)$.
-- [ ] **Ford-Fulkerson Algorithm (Augmenting Paths via DFS)**:
-  - Theoretical complexity: $O(E \cdot |f^*|)$.
-  - Residual graph construction $G_f$ with forward and backward edges.
-- [ ] **Edmonds-Karp Algorithm (Shortest Augmenting Path via BFS)**:
-  - Theoretical complexity: $O(V \cdot E^2)$.
-  - Prevents pathological flow augmentations on irrational or high-capacity links.
-- [ ] **Minimum Cut & CDN Bottleneck Identification**:
-  - By the Max-Flow Min-Cut Theorem, identify the exact bottleneck links between origin servers and edge POP clusters.
-- [ ] **Empirical Flow Comparison**:
-  - Benchmark DFS augmenting path selection vs BFS (Edmonds-Karp) across varying flow demands.
+### 1. Live Mode (Real-World Network Probing)
+- Integrate ICMP ping and traceroute against live IP addresses or public DNS endpoints (e.g., 1.1.1.1, 8.8.8.8).
+- Dynamically convert real-world RTT latency measurements into edge weights on an active geographic topology map.
+- Demonstrate automatic rerouting when live packet loss or latency spikes occur in real time.
 
----
+### 2. Karger's Randomized Min-Cut Algorithm
+- Implement Karger's contraction algorithm from scratch in pure Python.
+- Compare randomized contraction against the deterministic Edmonds-Karp reachability min-cut:
+  - Benchmark execution times across dense graphs.
+  - Analyze the empirical probability of finding the global minimum cut vs iteration count $T = O(V^2 \log V)$.
 
-### Phase 3: Edge Cache Placement via Set Cover (Review 3)
-*Focus: Optimal geographical placement of edge servers and content replicates.*
-
-- [ ] **Set Cover Formulation**:
-  - Given a universe of user regions $U = \{u_1, u_2, \dots, u_m\}$ and candidate edge cache POPs with defined coverage radii (e.g. latency $\le 30\text{ms}$).
-  - Objective: Minimize deployed edge servers while covering 100% of user populations.
-- [ ] **Greedy Approximation Algorithm**:
-  - $H_n$-factor logarithmic approximation ratio: $O(\ln |U|)$.
-- [ ] **Branch-and-Bound / Integer Linear Programming (ILP) Comparison**:
-  - Contrast greedy heuristic with optimal exhaustive branch-and-bound for small $N$.
-
----
-
-### Phase 4: Dynamic Load Balancing & Consistent Hashing (Final Evaluation)
-*Focus: Preventing edge server over-utilization under skewed client traffic.*
-
-- [ ] **Consistent Hashing Ring**:
-  - Implementation with virtual nodes (vnodes) to balance user requests across edge servers with $O(\log S)$ lookup.
-- [ ] **Randomized Load Balancing (Power of Two Choices)**:
-  - Route each incoming request to $\min(\text{load}(e_i), \text{load}(e_j))$ to achieve $O(\log \log n)$ maximum queue length.
-- [ ] **End-to-End Unified CDN Simulator**:
-  - Integrated simulation: Request routing (Phase 1) $\rightarrow$ Bandwidth allocation (Phase 2) $\rightarrow$ Cache placement (Phase 3) $\rightarrow$ Dynamic load balancing (Phase 4).
+### 3. Greedy Set Cover for Optimal Edge POP Placement
+- Formulate the CDN Edge Server Placement problem as a **Weighted Set Cover** problem:
+  - Given a set of user regions requiring coverage within latency threshold $L_{\max}$, select the minimum-cost subset of edge POPs that covers all regions.
+  - Implement the $(1 + \ln |U|)$-approximation greedy algorithm and compare against brute-force optimal on small topologies.

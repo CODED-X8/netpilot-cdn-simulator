@@ -209,3 +209,30 @@ This document tracks the progress of each milestone in the Mini CDN Routing Simu
   - Start `python dashboard/app.py`, open `http://localhost:5000`, click "📈 LLMOps" in navbar to view benchmark table, plot, token budget, and audit log.
 - **Known issues:** None.
 
+---
+
+## Milestone M9: Documentation, Clean Code, and Final Polish
+- **Status:** Complete (Tag: `m9`)
+- **What was done:**
+  - `ARCHITECTURE.md`:
+    - Full system architecture diagram (Mermaid + ASCII).
+    - End-to-end data flow: User -> UI -> Flask -> Guardrails -> Copilot Agent -> Tool Router -> Python Engines -> Grounding Verifier -> Storage.
+    - SQLite persistence schema specifications (`events` table, `documents` table, and secondary indexes).
+    - RAG pipeline documentation (chunking, cosine similarity, delimiter framing security).
+    - Safety, Guardrails & LLMOps summary table.
+  - `README.md`:
+    - Complete setup instructions with clean `cd DAA_PROJ` command pattern.
+    - Algorithm specifications, theoretical complexities, and zero-library routing guarantee.
+    - Docker containerization and docker-compose deployment guide.
+    - Evaluation harness usage guide (`--dry-run` vs `--real-run`) and baseline findings table.
+  - `ROADMAP.md`:
+    - Documented Review 1 and Review 2 completion statuses across all 9 milestones.
+    - Detailed 3 future stretch goals: Live Mode (real ping/traceroute), Karger's randomized min-cut, and Greedy Set Cover edge placement.
+  - Test Suite:
+    - **66 tests passing with 100% success rate** across the full pytest suite.
+    - Zero modifications or deletions to the original 20 baseline tests.
+- **How to verify:**
+  - Run `pytest -v` to confirm all 66 tests pass.
+  - Inspect `ARCHITECTURE.md`, `README.md`, and `ROADMAP.md`.
+  - Verify `cd DAA_PROJ && ...` command execution.
+- **Known issues:** None.
