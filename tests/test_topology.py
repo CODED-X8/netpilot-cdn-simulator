@@ -174,3 +174,34 @@ def test_template_generation():
     csv_edges = get_template_files("csv_edges")
     assert csv_edges["filename"] == "edges.csv"
     assert "source,target,latency_ms" in csv_edges["content"]
+
+
+def test_college_campus_topology_sample():
+    """Verify College Campus topology with Admin Building, AB1-AB4, and Hostel Blocks A-F."""
+    import os
+    from graph.generator import generate_college_campus_topology
+    from routing.bellman_ford import find_best_edge_server_bf
+
+    # 1. Test generator
+    g = generate_college_campus_topology()
+    assert g.has_node("Admin")
+    assert g.has_node("AB1")
+    assert g.has_node("AB2")
+    assert g.has_node("AB3")
+    assert g.has_node("AB4")
+    for block in ["Hostel_A", "Hostel_B", "Hostel_C", "Hostel_D", "Hostel_E", "Hostel_F"]:
+        assert g.has_node(block)
+        route = find_best_edge_server_bf(g, block)
+        assert route["best_edge"] in ["AB1", "AB2", "AB3", "AB4"]
+        assert route["latency"] > 0
+
+    # 2. Test JSON sample file
+    sample_path = os.path.join(os.path.dirname(__file__), "..", "samples", "campus_network.json")
+    with open(sample_path, "r", encoding="utf-8") as f:
+        json_content = f.read()
+    g_json, name, warnings = parse_json_topology(json_content)
+    assert name == "College Campus Network"
+    assert len(warnings) == 0
+    assert g_json.has_node("Admin")
+    assert g_json.has_node("AB1")
+

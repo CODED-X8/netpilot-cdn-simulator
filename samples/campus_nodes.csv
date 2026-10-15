@@ -1,0 +1,14 @@
+id,name,type
+Admin,Admin Building (Central DC),origin
+AB1,AB1 (Academic Building 1),edge_server
+AB2,AB2 (Academic Building 2),edge_server
+AB3,AB3 (Academic Building 3),edge_server
+AB4,AB4 (Academic Building 4),edge_server
+Core_Switch,Core Switch (IT Center),transit
+Hostel_Hub,Hostel Zone Distribution Hub,transit
+Hostel_A,Hostel Block A,user_region
+Hostel_B,Hostel Block B,user_region
+Hostel_C,Hostel Block C,user_region
+Hostel_D,Hostel Block D,user_region
+Hostel_E,Hostel Block E,user_region
+Hostel_F,Hostel Block F,user_region

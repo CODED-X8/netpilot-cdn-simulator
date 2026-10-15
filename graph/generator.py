@@ -209,3 +209,55 @@ def generate_random_benchmark_graph(
                     g.add_edge(node_ids[i], node_ids[j], latency=lat)
 
     return g
+
+
+def generate_college_campus_topology() -> Graph:
+    """Generate a college campus network topology with:
+    - Admin Building (Origin · Central Campus Data Center)
+    - AB1, AB2, AB3, AB4 (Academic Buildings 1 to 4 as Edge Servers)
+    - Core Switch (IT Center Optical Transit)
+    - Hostel Hub (Hostel Zone Distribution Hub)
+    - Hostel Blocks A, B, C, D, E, F (User Regions / Residence Halls)
+    """
+    g = Graph()
+    g.add_node("Admin", node_type="origin", label="Admin Building", tier="origin", role="Central Campus DC")
+    g.add_node("AB1", node_type="edge_server", label="AB1 (Academic Building 1)", tier="edge", role="Academic Cluster 1")
+    g.add_node("AB2", node_type="edge_server", label="AB2 (Academic Building 2)", tier="edge", role="Academic Cluster 2")
+    g.add_node("AB3", node_type="edge_server", label="AB3 (Academic Building 3)", tier="edge", role="Academic Cluster 3")
+    g.add_node("AB4", node_type="edge_server", label="AB4 (Academic Building 4)", tier="edge", role="Academic Cluster 4")
+    g.add_node("Core_Switch", node_type="user_region", label="Core Switch (IT Center)", tier="transit")
+    g.add_node("Hostel_Hub", node_type="user_region", label="Hostel Zone Distribution Hub", tier="transit")
+    g.add_node("Hostel_A", node_type="user_region", label="Hostel Block A", tier="user")
+    g.add_node("Hostel_B", node_type="user_region", label="Hostel Block B", tier="user")
+    g.add_node("Hostel_C", node_type="user_region", label="Hostel Block C", tier="user")
+    g.add_node("Hostel_D", node_type="user_region", label="Hostel Block D", tier="user")
+    g.add_node("Hostel_E", node_type="user_region", label="Hostel Block E", tier="user")
+    g.add_node("Hostel_F", node_type="user_region", label="Hostel Block F", tier="user")
+
+    edges = [
+        ("Admin", "Core_Switch", 1.0, 10000.0),
+        ("Admin", "AB1", 1.2, 10000.0),
+        ("Admin", "AB2", 1.5, 10000.0),
+        ("Core_Switch", "AB3", 1.8, 5000.0),
+        ("Core_Switch", "AB4", 1.6, 5000.0),
+        ("AB1", "AB2", 1.4, 5000.0),
+        ("AB2", "AB3", 1.6, 5000.0),
+        ("AB3", "AB4", 1.5, 5000.0),
+        ("AB4", "AB1", 2.0, 5000.0),
+        ("Hostel_A", "AB1", 3.0, 1000.0),
+        ("Hostel_A", "Hostel_B", 1.5, 1000.0),
+        ("Hostel_B", "AB2", 3.2, 1000.0),
+        ("Hostel_B", "Hostel_C", 1.6, 1000.0),
+        ("Hostel_C", "AB2", 3.6, 1000.0),
+        ("Hostel_C", "Hostel_D", 1.4, 1000.0),
+        ("Hostel_D", "AB3", 3.4, 1000.0),
+        ("Hostel_E", "AB4", 3.8, 1000.0),
+        ("Hostel_E", "Hostel_F", 1.5, 1000.0),
+        ("Hostel_F", "Hostel_Hub", 2.2, 1000.0),
+        ("Hostel_Hub", "AB4", 2.8, 2000.0),
+        ("Hostel_Hub", "AB3", 3.5, 2000.0),
+    ]
+    for u, v, lat, bw in edges:
+        g.add_edge(u, v, latency=lat, bandwidth_capacity=bw, bidirectional=True)
+
+    return g

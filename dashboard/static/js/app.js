@@ -694,6 +694,7 @@ benchmarkModal.addEventListener("click", (e) => {
 const btnOpenUpload = document.getElementById("btn-open-upload");
 const btnCloseUploadModal = document.getElementById("btn-close-upload-modal");
 const uploadModal = document.getElementById("upload-modal");
+const btnQuickCampus = document.getElementById("btn-quick-campus");
 const btnLoadCampus = document.getElementById("btn-load-campus");
 const btnLoadCloud = document.getElementById("btn-load-cloud");
 const btnLoadCdn = document.getElementById("btn-load-cdn");
@@ -744,6 +745,9 @@ async function loadSampleTopology(sampleId) {
   }
 }
 
+if (btnQuickCampus) {
+  btnQuickCampus.addEventListener("click", () => loadSampleTopology("campus_network.json"));
+}
 if (btnLoadCampus) {
   btnLoadCampus.addEventListener("click", () => loadSampleTopology("campus_network.json"));
 }

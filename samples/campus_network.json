@@ -1,23 +1,220 @@
 {
-  "name": "University Campus Network",
-  "description": "Enterprise campus network with central datacenter, divisional POPs, optical transit, and residence halls.",
+  "name": "College Campus Network",
+  "description": "College campus network featuring Admin Building, Academic Buildings AB1-AB4, Core IT Switch, and Hostel Blocks A-F.",
   "nodes": [
-    {"id": "dc_core", "name": "Main Campus Datacenter", "type": "origin"},
-    {"id": "edge_eng", "name": "Engineering POP", "type": "edge_server"},
-    {"id": "edge_sci", "name": "Sciences POP", "type": "edge_server"},
-    {"id": "transit_optical", "name": "Campus Optical Core", "type": "transit"},
-    {"id": "dorm_north", "name": "North Residence Halls", "type": "user_region"},
-    {"id": "dorm_south", "name": "South Residence Halls", "type": "user_region"},
-    {"id": "library_users", "name": "Central Library Users", "type": "user_region"}
+    {
+      "id": "Admin",
+      "name": "Admin Building (Central DC)",
+      "type": "origin"
+    },
+    {
+      "id": "AB1",
+      "name": "AB1 (Academic Building 1)",
+      "type": "edge_server"
+    },
+    {
+      "id": "AB2",
+      "name": "AB2 (Academic Building 2)",
+      "type": "edge_server"
+    },
+    {
+      "id": "AB3",
+      "name": "AB3 (Academic Building 3)",
+      "type": "edge_server"
+    },
+    {
+      "id": "AB4",
+      "name": "AB4 (Academic Building 4)",
+      "type": "edge_server"
+    },
+    {
+      "id": "Core_Switch",
+      "name": "Core Switch (IT Center)",
+      "type": "transit"
+    },
+    {
+      "id": "Hostel_Hub",
+      "name": "Hostel Zone Distribution Hub",
+      "type": "transit"
+    },
+    {
+      "id": "Hostel_A",
+      "name": "Hostel Block A",
+      "type": "user_region"
+    },
+    {
+      "id": "Hostel_B",
+      "name": "Hostel Block B",
+      "type": "user_region"
+    },
+    {
+      "id": "Hostel_C",
+      "name": "Hostel Block C",
+      "type": "user_region"
+    },
+    {
+      "id": "Hostel_D",
+      "name": "Hostel Block D",
+      "type": "user_region"
+    },
+    {
+      "id": "Hostel_E",
+      "name": "Hostel Block E",
+      "type": "user_region"
+    },
+    {
+      "id": "Hostel_F",
+      "name": "Hostel Block F",
+      "type": "user_region"
+    }
   ],
   "edges": [
-    {"source": "dc_core", "target": "transit_optical", "latency_ms": 1.2, "capacity_mbps": 10000, "directed": false},
-    {"source": "transit_optical", "target": "edge_eng", "latency_ms": 1.8, "capacity_mbps": 5000, "directed": false},
-    {"source": "transit_optical", "target": "edge_sci", "latency_ms": 2.1, "capacity_mbps": 5000, "directed": false},
-    {"source": "edge_eng", "target": "edge_sci", "latency_ms": 1.5, "capacity_mbps": 2000, "directed": false},
-    {"source": "dorm_north", "target": "edge_eng", "latency_ms": 4.2, "capacity_mbps": 1000, "directed": false},
-    {"source": "dorm_south", "target": "edge_sci", "latency_ms": 4.8, "capacity_mbps": 1000, "directed": false},
-    {"source": "library_users", "target": "edge_eng", "latency_ms": 3.0, "capacity_mbps": 1000, "directed": false},
-    {"source": "library_users", "target": "edge_sci", "latency_ms": 3.2, "capacity_mbps": 1000, "directed": false}
+    {
+      "source": "Admin",
+      "target": "Core_Switch",
+      "latency_ms": 1.0,
+      "capacity_mbps": 10000,
+      "directed": false
+    },
+    {
+      "source": "Admin",
+      "target": "AB1",
+      "latency_ms": 1.2,
+      "capacity_mbps": 10000,
+      "directed": false
+    },
+    {
+      "source": "Admin",
+      "target": "AB2",
+      "latency_ms": 1.5,
+      "capacity_mbps": 10000,
+      "directed": false
+    },
+    {
+      "source": "Core_Switch",
+      "target": "AB3",
+      "latency_ms": 1.8,
+      "capacity_mbps": 5000,
+      "directed": false
+    },
+    {
+      "source": "Core_Switch",
+      "target": "AB4",
+      "latency_ms": 1.6,
+      "capacity_mbps": 5000,
+      "directed": false
+    },
+    {
+      "source": "AB1",
+      "target": "AB2",
+      "latency_ms": 1.4,
+      "capacity_mbps": 5000,
+      "directed": false
+    },
+    {
+      "source": "AB2",
+      "target": "AB3",
+      "latency_ms": 1.6,
+      "capacity_mbps": 5000,
+      "directed": false
+    },
+    {
+      "source": "AB3",
+      "target": "AB4",
+      "latency_ms": 1.5,
+      "capacity_mbps": 5000,
+      "directed": false
+    },
+    {
+      "source": "AB4",
+      "target": "AB1",
+      "latency_ms": 2.0,
+      "capacity_mbps": 5000,
+      "directed": false
+    },
+    {
+      "source": "Hostel_A",
+      "target": "AB1",
+      "latency_ms": 3.0,
+      "capacity_mbps": 1000,
+      "directed": false
+    },
+    {
+      "source": "Hostel_A",
+      "target": "Hostel_B",
+      "latency_ms": 1.5,
+      "capacity_mbps": 1000,
+      "directed": false
+    },
+    {
+      "source": "Hostel_B",
+      "target": "AB2",
+      "latency_ms": 3.2,
+      "capacity_mbps": 1000,
+      "directed": false
+    },
+    {
+      "source": "Hostel_B",
+      "target": "Hostel_C",
+      "latency_ms": 1.6,
+      "capacity_mbps": 1000,
+      "directed": false
+    },
+    {
+      "source": "Hostel_C",
+      "target": "AB2",
+      "latency_ms": 3.6,
+      "capacity_mbps": 1000,
+      "directed": false
+    },
+    {
+      "source": "Hostel_C",
+      "target": "Hostel_D",
+      "latency_ms": 1.4,
+      "capacity_mbps": 1000,
+      "directed": false
+    },
+    {
+      "source": "Hostel_D",
+      "target": "AB3",
+      "latency_ms": 3.4,
+      "capacity_mbps": 1000,
+      "directed": false
+    },
+    {
+      "source": "Hostel_E",
+      "target": "AB4",
+      "latency_ms": 3.8,
+      "capacity_mbps": 1000,
+      "directed": false
+    },
+    {
+      "source": "Hostel_E",
+      "target": "Hostel_F",
+      "latency_ms": 1.5,
+      "capacity_mbps": 1000,
+      "directed": false
+    },
+    {
+      "source": "Hostel_F",
+      "target": "Hostel_Hub",
+      "latency_ms": 2.2,
+      "capacity_mbps": 1000,
+      "directed": false
+    },
+    {
+      "source": "Hostel_Hub",
+      "target": "AB4",
+      "latency_ms": 2.8,
+      "capacity_mbps": 2000,
+      "directed": false
+    },
+    {
+      "source": "Hostel_Hub",
+      "target": "AB3",
+      "latency_ms": 3.5,
+      "capacity_mbps": 2000,
+      "directed": false
+    }
   ]
 }
