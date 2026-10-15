@@ -220,3 +220,41 @@ def test_groq_provider_detection(monkeypatch):
     monkeypatch.setenv("GROQ_MODEL", "llama-3.1-8b-instant")
     provider2 = get_llm_provider()
     assert provider2.model == "llama-3.1-8b-instant"
+
+
+def test_ollama_provider_detection_and_failover(monkeypatch):
+    """Test Ollama provider detection and fallback behavior."""
+    from copilot.llm_provider import (
+        get_llm_provider,
+        get_active_provider_name,
+        get_ollama_provider,
+        OpenAICompatibleProvider,
+        FakeLLMProvider,
+    )
+
+    # 1. Ollama provider attributes
+    ollama_prov = get_ollama_provider()
+    assert ollama_prov.base_url == "http://localhost:11434/v1"
+    assert "qwen" in ollama_prov.model.lower()
+
+    # 2. Test fallback execution when primary fails
+    mock_fallback = FakeLLMProvider(scripted_steps=["Fallback response from backup"])
+    failing_primary = OpenAICompatibleProvider(
+        api_key="broken_key",
+        base_url="https://broken-primary.invalid/v1",
+        model="primary-test",
+        fallback_provider=mock_fallback,
+        timeout=1,
+    )
+    resp = failing_primary.chat_complete([{"role": "user", "content": "hi"}])
+    assert resp.content == "Fallback response from backup"
+
+    # 3. Explicit Ollama provider mode
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("OLLAMA_MODEL", "qwen3:8b-q4_K_M")
+    assert get_active_provider_name() == "ollama"
+    prov = get_llm_provider()
+    assert prov is not None
+    assert prov.model == "qwen3:8b-q4_K_M"
+    assert "11434" in prov.base_url
+

@@ -85,18 +85,59 @@ class BaseLLMProvider:
         raise NotImplementedError
 
 
+def is_ollama_available(base_url: str = "http://localhost:11434") -> bool:
+    """Quick check if local Ollama daemon is active and responding."""
+    try:
+        url = base_url.rstrip("/")
+        if url.endswith("/v1"):
+            url = url[:-3]
+        req = urllib.request.Request(f"{url}/api/tags", headers={"User-Agent": "NetPilot/1.0"})
+        with urllib.request.urlopen(req, timeout=1.5) as resp:
+            return resp.status == 200
+    except Exception:
+        return False
+
+
+def get_ollama_provider(
+    base_url: Optional[str] = None,
+    model: Optional[str] = None,
+    timeout: int = 90,
+) -> "OpenAICompatibleProvider":
+    """Construct an OpenAICompatibleProvider pointing to local Ollama."""
+    ollama_url = (
+        base_url
+        or os.environ.get("OLLAMA_BASE_URL", "").strip()
+        or "http://localhost:11434/v1"
+    )
+    ollama_model = (
+        model
+        or os.environ.get("OLLAMA_MODEL", "").strip()
+        or "qwen3:8b-q4_K_M"
+    )
+    return OpenAICompatibleProvider(
+        api_key="ollama",
+        base_url=ollama_url,
+        model=ollama_model,
+        timeout=timeout,
+    )
+
+
 class OpenAICompatibleProvider(BaseLLMProvider):
-    """Client for any OpenAI-compatible chat completions endpoint."""
+    """Client for any OpenAI-compatible chat completions endpoint with optional fallback failover."""
 
     def __init__(
         self,
         api_key: str,
         base_url: str = "https://api.openai.com/v1",
         model: str = "gpt-4o-mini",
+        fallback_provider: Optional[BaseLLMProvider] = None,
+        timeout: int = 30,
     ):
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.model = model
+        self.fallback_provider = fallback_provider
+        self.timeout = timeout
 
     def chat_complete(
         self,
@@ -128,7 +169,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         )
 
         try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
 
             choice = data["choices"][0]["message"]
@@ -152,10 +193,25 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                 completion_tokens=usage.get("completion_tokens", 0),
             )
 
-        except urllib.error.HTTPError as e:
-            err_body = e.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"LLM API HTTP {e.code}: {err_body}")
         except Exception as e:
+            if self.fallback_provider is not None:
+                err_detail = f"HTTP {e.code}" if isinstance(e, urllib.error.HTTPError) else str(e)
+                fb_model = getattr(self.fallback_provider, "model", "backup")
+                fb_url = getattr(self.fallback_provider, "base_url", "local")
+                print(
+                    f"\n[NetPilot Failover] Primary LLM ({self.model} at {self.base_url}) encountered error: {err_detail}. "
+                    f"Failing over to local Ollama ({fb_model} at {fb_url})..."
+                )
+                try:
+                    return self.fallback_provider.chat_complete(messages, tools)
+                except Exception as fb_err:
+                    raise RuntimeError(
+                        f"Primary LLM ({self.model}) failed ({err_detail}) AND fallback Ollama ({fb_model}) failed: {str(fb_err)}"
+                    )
+
+            if isinstance(e, urllib.error.HTTPError):
+                err_body = e.read().decode("utf-8", errors="replace")
+                raise RuntimeError(f"LLM API HTTP {e.code}: {err_body}")
             raise RuntimeError(f"LLM API request failed: {str(e)}")
 
 
@@ -363,24 +419,44 @@ class FakeLLMProvider(BaseLLMProvider):
 
 
 def get_active_provider_name() -> str:
-    """Detect configured provider: 'groq', 'openai', or 'offline'."""
+    """Detect configured provider: 'groq', 'openai', 'ollama', or 'offline'."""
     groq_key = os.environ.get("GROQ_API_KEY", "").strip()
     llm_key = os.environ.get("LLM_API_KEY", "").strip()
-    if groq_key or llm_key.startswith("gsk_") or os.environ.get("LLM_PROVIDER", "").lower() == "groq":
+    provider_pref = os.environ.get("LLM_PROVIDER", "").strip().lower()
+
+    if provider_pref == "ollama":
+        return "ollama"
+    if groq_key or llm_key.startswith("gsk_") or provider_pref == "groq":
         return "groq"
     if llm_key:
         return "openai"
+    if os.environ.get("OLLAMA_ENABLED", "").strip().lower() in ("true", "1", "yes") and is_ollama_available():
+        return "ollama"
     return "offline"
 
 
 def get_llm_provider(force_fake: bool = False, fake_steps: Optional[List[Any]] = None) -> Optional[BaseLLMProvider]:
-    """Retrieve active LLM Provider based on env vars (Groq, OpenAI, or offline fake provider)."""
+    """Retrieve active LLM Provider based on env vars (Groq, OpenAI, or offline fake provider)
+    with automatic failover to local Ollama if running.
+    """
     if force_fake:
         return FakeLLMProvider(scripted_steps=fake_steps)
 
     # Check for Groq API key first, then generic LLM_API_KEY
     groq_key = os.environ.get("GROQ_API_KEY", "").strip()
     llm_key = os.environ.get("LLM_API_KEY", "").strip()
+    provider_pref = os.environ.get("LLM_PROVIDER", "").strip().lower()
+    ollama_enabled = os.environ.get("OLLAMA_ENABLED", "").strip().lower() in ("true", "1", "yes")
+
+    # Determine if Ollama backup is enabled (default True unless explicitly disabled)
+    enable_ollama_fallback = os.environ.get("OLLAMA_FALLBACK", "true").strip().lower() not in ("false", "0", "no", "off")
+    fallback_provider = None
+    if enable_ollama_fallback and is_ollama_available():
+        fallback_provider = get_ollama_provider()
+
+    # 1. Standalone local Ollama mode
+    if provider_pref == "ollama" or (ollama_enabled and not (groq_key or llm_key)):
+        return get_ollama_provider()
 
     api_key = groq_key or llm_key
     if not api_key:
@@ -388,7 +464,7 @@ def get_llm_provider(force_fake: bool = False, fake_steps: Optional[List[Any]] =
         return None
 
     # Detect if target is Groq
-    is_groq = bool(groq_key) or api_key.startswith("gsk_") or os.environ.get("LLM_PROVIDER", "").lower() == "groq"
+    is_groq = bool(groq_key) or api_key.startswith("gsk_") or provider_pref == "groq"
 
     if is_groq:
         # For Groq, always use Groq base URL unless GROQ_BASE_URL is explicitly set
@@ -408,4 +484,10 @@ def get_llm_provider(force_fake: bool = False, fake_steps: Optional[List[Any]] =
         base_url = os.environ.get("LLM_BASE_URL", "https://api.openai.com/v1").strip()
         model = os.environ.get("LLM_MODEL", "gpt-4o-mini").strip()
 
-    return OpenAICompatibleProvider(api_key=api_key, base_url=base_url, model=model)
+    return OpenAICompatibleProvider(
+        api_key=api_key,
+        base_url=base_url,
+        model=model,
+        fallback_provider=fallback_provider,
+        timeout=25,
+    )
