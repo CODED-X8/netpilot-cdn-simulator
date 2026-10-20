@@ -594,8 +594,11 @@ def get_benchmark_data():
                 "BF_Operations": int(r["BF_Operations"]),
                 "FW_Time_ms": float(r["FW_Time_ms"]),
                 "FW_Operations": int(r["FW_Operations"]),
+                "Dijk_Time_ms": float(r.get("Dijk_Time_ms", 0.0)),
+                "Dijk_Operations": int(r.get("Dijk_Operations", 0)),
                 "Theoretical_O_VE": int(r["Theoretical_O_VE"]),
                 "Theoretical_O_V3": int(r["Theoretical_O_V3"]),
+                "Theoretical_O_E_log_V": int(r.get("Theoretical_O_E_log_V", 0)),
             })
 
     return jsonify({"benchmarks": rows})

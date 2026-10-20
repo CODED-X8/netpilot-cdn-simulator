@@ -10,7 +10,7 @@ import services.network_service as net_service
 
 class ShortestPathArgs(BaseModel):
     source: str = Field(..., description="ID of the user region to route from (e.g. 'user_1', 'user_3').")
-    algo: Optional[Literal["bellman_ford", "floyd_warshall"]] = Field("bellman_ford", description="Shortest path algorithm: 'bellman_ford' or 'floyd_warshall'.")
+    algo: Optional[Literal["bellman_ford", "floyd_warshall", "dijkstra"]] = Field("bellman_ford", description="Shortest path algorithm: 'bellman_ford', 'floyd_warshall', or 'dijkstra'.")
 
 
 class CompareAlgorithmsArgs(BaseModel):
@@ -96,7 +96,7 @@ COPILOT_TOOLS_OPENAI_SPEC: List[Dict[str, Any]] = [
                 "type": "object",
                 "properties": {
                     "source": {"type": "string", "description": "ID of user region (e.g. 'user_1', 'user_3')"},
-                    "algo": {"type": ["string", "null"], "enum": ["bellman_ford", "floyd_warshall", None], "default": "bellman_ford"},
+                    "algo": {"type": ["string", "null"], "enum": ["bellman_ford", "floyd_warshall", "dijkstra", None], "default": "bellman_ford"},
                 },
                 "required": ["source"],
             },
@@ -106,7 +106,7 @@ COPILOT_TOOLS_OPENAI_SPEC: List[Dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "compare_algorithms",
-            "description": "Run both Bellman-Ford and Floyd-Warshall on the same source to cross-validate latency and path agreement.",
+            "description": "Run Bellman-Ford, Floyd-Warshall, and Dijkstra on the same source to cross-validate latency and three-way path agreement.",
             "parameters": {
                 "type": "object",
                 "properties": {

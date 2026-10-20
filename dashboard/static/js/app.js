@@ -53,6 +53,9 @@ const cmpBfTime = document.getElementById("cmp-bf-time");
 const cmpFwLat = document.getElementById("cmp-fw-lat");
 const cmpFwOps = document.getElementById("cmp-fw-ops");
 const cmpFwTime = document.getElementById("cmp-fw-time");
+const cmpDijkLat = document.getElementById("cmp-dijk-lat");
+const cmpDijkOps = document.getElementById("cmp-dijk-ops");
+const cmpDijkTime = document.getElementById("cmp-dijk-time");
 
 // Fault Diff DOM
 const faultDiffCard = document.getElementById("fault-diff-card");
@@ -291,19 +294,26 @@ function displayTelemetry(data) {
 
     const bf = data.bellman_ford;
     const fw = data.floyd_warshall;
+    const dijk = data.dijkstra;
     const ag = data.agreement;
 
-    cmpBfLat.textContent = bf.latency !== null ? `${bf.latency.toFixed(1)} ms` : "∞";
-    cmpBfOps.textContent = `${bf.operations.toLocaleString()} ops`;
-    cmpBfTime.textContent = `${bf.execution_time_ms} ms`;
+    cmpBfLat.textContent = bf && bf.latency !== null ? `${bf.latency.toFixed(1)} ms` : "∞";
+    cmpBfOps.textContent = bf ? `${bf.operations.toLocaleString()} ops` : "--";
+    cmpBfTime.textContent = bf ? `${bf.execution_time_ms} ms` : "--";
 
-    cmpFwLat.textContent = fw.latency !== null ? `${fw.latency.toFixed(1)} ms` : "∞";
-    cmpFwOps.textContent = `${fw.operations.toLocaleString()} ops`;
-    cmpFwTime.textContent = `${fw.execution_time_ms} ms`;
+    cmpFwLat.textContent = fw && fw.latency !== null ? `${fw.latency.toFixed(1)} ms` : "∞";
+    cmpFwOps.textContent = fw ? `${fw.operations.toLocaleString()} ops` : "--";
+    cmpFwTime.textContent = fw ? `${fw.execution_time_ms} ms` : "--";
 
-    if (ag.matched) {
+    if (cmpDijkLat && dijk) {
+      cmpDijkLat.textContent = dijk.latency !== null ? `${dijk.latency.toFixed(1)} ms` : "∞";
+      cmpDijkOps.textContent = `${dijk.operations.toLocaleString()} ops`;
+      cmpDijkTime.textContent = `${dijk.execution_time_ms} ms`;
+    }
+
+    if (ag.three_way_matched || ag.matched) {
       cmpAgreementBadge.className = "agreement-badge";
-      cmpAgreementBadge.innerHTML = "✅ 100% Agreement: Both Algorithms Found Identical Shortest Distance";
+      cmpAgreementBadge.innerHTML = "✅ 100% Three-Way Agreement: Bellman-Ford, Floyd-Warshall & Dijkstra Found Identical Shortest Distance";
     } else {
       cmpAgreementBadge.className = "agreement-badge agreement-mismatch";
       cmpAgreementBadge.innerHTML = `⚠️ Difference: &Delta; ${ag.latency_diff} ms`;

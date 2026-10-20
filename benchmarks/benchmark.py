@@ -15,10 +15,12 @@ from typing import List, Dict, Any
 # Ensure project root is on sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+import math
 import matplotlib.pyplot as plt
 from graph.generator import generate_random_benchmark_graph
 from routing.bellman_ford import bellman_ford
 from routing.floyd_warshall import floyd_warshall
+from routing.dijkstra import dijkstra
 
 
 def run_benchmark(
@@ -31,14 +33,16 @@ def run_benchmark(
     os.makedirs(output_dir, exist_ok=True)
     results: List[Dict[str, Any]] = []
 
-    print(f"{'N':>5} | {'|E|':>6} | {'BF Time (ms)':>12} | {'BF Ops':>10} | {'FW Time (ms)':>12} | {'FW Ops':>12}")
-    print("-" * 68)
+    print(f"{'N':>5} | {'|E|':>6} | {'BF Time (ms)':>12} | {'BF Ops':>10} | {'FW Time (ms)':>12} | {'FW Ops':>12} | {'Dijk Time':>10} | {'Dijk Ops':>10}")
+    print("-" * 92)
 
     for n in node_counts:
         bf_times = []
         bf_ops_list = []
         fw_times = []
         fw_ops_list = []
+        dijk_times = []
+        dijk_ops_list = []
         edge_counts = []
 
         for trial in range(trials_per_n):
@@ -66,11 +70,20 @@ def run_benchmark(
             fw_times.append((t1 - t0) * 1000.0)  # ms
             fw_ops_list.append(fw_res.operations)
 
+            # 3. Benchmark Dijkstra (Single-Source Heap)
+            t0 = time.perf_counter()
+            dijk_res = dijkstra(g, source=source_node)
+            t1 = time.perf_counter()
+            dijk_times.append((t1 - t0) * 1000.0)  # ms
+            dijk_ops_list.append(dijk_res.operations)
+
         avg_e = int(sum(edge_counts) / len(edge_counts))
         avg_bf_time = sum(bf_times) / len(bf_times)
         avg_bf_ops = int(sum(bf_ops_list) / len(bf_ops_list))
         avg_fw_time = sum(fw_times) / len(fw_times)
         avg_fw_ops = int(sum(fw_ops_list) / len(fw_ops_list))
+        avg_dijk_time = sum(dijk_times) / len(dijk_times)
+        avg_dijk_ops = int(sum(dijk_ops_list) / len(dijk_ops_list))
 
         row = {
             "N": n,
@@ -79,14 +92,17 @@ def run_benchmark(
             "BF_Operations": avg_bf_ops,
             "FW_Time_ms": round(avg_fw_time, 3),
             "FW_Operations": avg_fw_ops,
+            "Dijk_Time_ms": round(avg_dijk_time, 3),
+            "Dijk_Operations": avg_dijk_ops,
             "Theoretical_O_VE": n * avg_e,
             "Theoretical_O_V3": n ** 3,
+            "Theoretical_O_E_log_V": int(avg_e * math.log2(max(2, n))),
         }
         results.append(row)
 
         print(
             f"{n:>5} | {avg_e:>6} | {avg_bf_time:>12.2f} | {avg_bf_ops:>10} | "
-            f"{avg_fw_time:>12.2f} | {avg_fw_ops:>12}"
+            f"{avg_fw_time:>12.2f} | {avg_fw_ops:>12} | {avg_dijk_time:>10.2f} | {avg_dijk_ops:>10}"
         )
 
     # Save CSV
@@ -110,44 +126,50 @@ def plot_benchmark_results(results: List[Dict[str, Any]], output_path: str):
     n_vals = [r["N"] for r in results]
     bf_times = [r["BF_Time_ms"] for r in results]
     fw_times = [r["FW_Time_ms"] for r in results]
+    dijk_times = [r["Dijk_Time_ms"] for r in results]
     bf_ops = [r["BF_Operations"] for r in results]
     fw_ops = [r["FW_Operations"] for r in results]
+    dijk_ops = [r["Dijk_Operations"] for r in results]
     theo_ve = [r["Theoretical_O_VE"] for r in results]
     theo_v3 = [r["Theoretical_O_V3"] for r in results]
+    theo_e_log_v = [r.get("Theoretical_O_E_log_V", 0) for r in results]
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6), dpi=300)
     plt.subplots_adjust(wspace=0.25)
 
     # ------------------ Subplot 1: Wall-Clock Execution Time ------------------
-    ax1.plot(n_vals, fw_times, "o-", color="#d9534f", linewidth=2.2, label="Floyd-Warshall (All-Pairs APSP)")
-    ax1.plot(n_vals, bf_times, "s-", color="#0275d8", linewidth=2.2, label="Bellman-Ford (Single-Source SSSP)")
+    ax1.plot(n_vals, fw_times, "o-", color="#d9534f", linewidth=2.2, label="Floyd-Warshall (APSP $O(V^3)$)")
+    ax1.plot(n_vals, bf_times, "s-", color="#0275d8", linewidth=2.2, label="Bellman-Ford (SSSP $O(V \\cdot E)$)")
+    ax1.plot(n_vals, dijk_times, "^-", color="#10b981", linewidth=2.2, label="Dijkstra (SSSP Heap $O(E \\log V)$)")
     ax1.set_title("Empirical Execution Time vs Graph Size (N)", fontsize=13, fontweight="bold", pad=12)
     ax1.set_xlabel("Number of Nodes |V|", fontsize=11, fontweight="medium")
     ax1.set_ylabel("Execution Time (ms)", fontsize=11, fontweight="medium")
     ax1.set_yscale("log")
     ax1.grid(True, which="both", linestyle="--", alpha=0.5)
-    ax1.legend(loc="upper left", frameon=True, fontsize=10)
+    ax1.legend(loc="upper left", frameon=True, fontsize=9.5)
 
     # Annotate complexities
     ax1.text(
-        0.05, 0.65,
-        "Floyd-Warshall: $O(V^3)$\nBellman-Ford: $O(V \\cdot E)$",
+        0.05, 0.58,
+        "Floyd-Warshall: $O(V^3)$\nBellman-Ford: $O(V \\cdot E)$\nDijkstra: $O((V+E) \\log V)$",
         transform=ax1.transAxes,
         bbox=dict(boxstyle="round,pad=0.5", facecolor="#f8f9fa", edgecolor="#ced4da", alpha=0.9),
-        fontsize=10,
+        fontsize=9,
     )
 
     # ------------------ Subplot 2: Empirical Operation Counts ------------------
-    ax2.plot(n_vals, fw_ops, "o-", color="#d9534f", linewidth=2.2, label="Measured FW Comparisons")
+    ax2.plot(n_vals, fw_ops, "o-", color="#d9534f", linewidth=2.2, label="Measured FW Ops")
     ax2.plot(n_vals, theo_v3, "--", color="#8b0000", alpha=0.6, label="Theoretical $V^3$")
-    ax2.plot(n_vals, bf_ops, "s-", color="#0275d8", linewidth=2.2, label="Measured BF Comparisons")
+    ax2.plot(n_vals, bf_ops, "s-", color="#0275d8", linewidth=2.2, label="Measured BF Ops")
     ax2.plot(n_vals, theo_ve, "--", color="#003366", alpha=0.6, label="Theoretical $(V-1) \\cdot E$")
+    ax2.plot(n_vals, dijk_ops, "^-", color="#10b981", linewidth=2.2, label="Measured Dijkstra Ops")
+    ax2.plot(n_vals, theo_e_log_v, ":", color="#047857", alpha=0.7, label=r"Theoretical $E \log_2 V$")
     ax2.set_title("Elementary Operations vs Graph Size (N)", fontsize=13, fontweight="bold", pad=12)
     ax2.set_xlabel("Number of Nodes |V|", fontsize=11, fontweight="medium")
-    ax2.set_ylabel("Operation Count (Comparisons)", fontsize=11, fontweight="medium")
+    ax2.set_ylabel("Operation Count (Comparisons & Heap)", fontsize=11, fontweight="medium")
     ax2.set_yscale("log")
     ax2.grid(True, which="both", linestyle="--", alpha=0.5)
-    ax2.legend(loc="upper left", frameon=True, fontsize=9.5)
+    ax2.legend(loc="upper left", frameon=True, fontsize=9)
 
     plt.suptitle("Mini CDN Routing Engine: Empirical vs Theoretical Complexity Analysis", fontsize=15, fontweight="bold", y=0.98)
     plt.tight_layout()

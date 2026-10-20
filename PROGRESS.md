@@ -236,3 +236,30 @@ This document tracks the progress of each milestone in the Mini CDN Routing Simu
   - Inspect `ARCHITECTURE.md`, `README.md`, and `ROADMAP.md`.
   - Verify `cd DAA_PROJ && ...` command execution.
 - **Known issues:** None.
+
+---
+
+## Milestone X1: Dijkstra SSSP Engine
+- **Status:** Complete (Tag: `x1`)
+- **What was done:**
+  - `routing/dijkstra.py`: Hand-written Dijkstra Single-Source Shortest Path (SSSP) algorithm from scratch using Python's standard library binary min-heap (`heapq`).
+  - Added strict negative-edge validation raising clear `ValueError` if any negative-weight edge exists anywhere in the graph.
+  - Instrumented with an empirical operation counter tracking heap insertions, extractions, and relaxation checks.
+  - Added `DijkstraResult` (distances, predecessors, operations, `get_path()`) and `find_best_edge_server_dijkstra()` for CDN edge server discovery.
+  - `services/network_service.py`:
+    - Integrated `dijkstra` into `shortest_path()` with theoretical complexity $O((|V| + |E|) \log |V|)$.
+    - Upgraded `compare_algorithms()` to execute Bellman-Ford, Floyd-Warshall, and Dijkstra side-by-side with full three-way cross-validation agreement (`three_way_matched`, `best_edge_match`, `latency_diff`).
+  - `copilot/tools.py` & `copilot/llm_provider.py`: Updated `ShortestPathArgs` schema and tool specifications to support `"dijkstra"`.
+  - `benchmarks/benchmark.py`: Added Dijkstra to empirical benchmarking across $N = [10, 20, 50, 80, 120, 160, 200]$, updated CSV output (`Dijk_Time_ms`, `Dijk_Operations`, `Theoretical_O_E_log_V`), and updated Matplotlib chart (`complexity_benchmark.png`) with 3 comparison curves on both subplots.
+  - `dashboard/app.py`, `dashboard/templates/index.html`, `dashboard/static/js/app.js`, `dashboard/static/css/style.css`:
+    - Added "Dijkstra" radio button to algorithm selector.
+    - Added third comparison card for Dijkstra SSSP Heap in Compare Both view.
+    - Added three-way agreement badge reporting 100% agreement between Bellman-Ford, Floyd-Warshall, and Dijkstra.
+  - `tests/test_dijkstra.py`: 10 comprehensive tests covering handcrafted graphs, negative-weight error handling, disconnected nodes, edge server discovery, and 25 random topology cross-validations against Bellman-Ford and Floyd-Warshall.
+  - Test suite: **79 passing tests** (original 20 untouched + 59 new).
+- **How to verify:**
+  - Run `pytest -v tests/test_dijkstra.py tests/`
+  - Run `python benchmarks/benchmark.py` and inspect `benchmarks/results/complexity_benchmark.png`.
+  - Start app `python dashboard/app.py`, select "Dijkstra" in Algorithm panel, run route query, or choose "Compare Both" to see the three-way agreement card and badge.
+- **Known issues:** None.
+

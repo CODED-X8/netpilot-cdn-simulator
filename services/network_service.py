@@ -14,6 +14,7 @@ from graph.network import Graph
 from graph.generator import generate_cdn_topology
 from routing.bellman_ford import find_best_edge_server_bf, bellman_ford
 from routing.floyd_warshall import find_best_edge_server_fw, floyd_warshall
+from routing.dijkstra import find_best_edge_server_dijkstra, dijkstra
 from routing.max_flow import edmonds_karp, ford_fulkerson, compute_max_flow
 from storage.event_store import get_event_store
 
@@ -116,8 +117,11 @@ def shortest_path(
     elif algo_norm in ("floyd_warshall", "fw"):
         result = find_best_edge_server_fw(g, source)
         complexity = "O(|V|^3)"
+    elif algo_norm in ("dijkstra", "dijk"):
+        result = find_best_edge_server_dijkstra(g, source)
+        complexity = "O((|V| + |E|) log |V|)"
     else:
-        raise ValueError(f"Unknown routing algorithm '{algo}'. Must be 'bellman_ford' or 'floyd_warshall'.")
+        raise ValueError(f"Unknown routing algorithm '{algo}'. Must be 'bellman_ford', 'floyd_warshall', or 'dijkstra'.")
 
     t1 = time.perf_counter()
     exec_time_ms = (t1 - t0) * 1000.0
@@ -160,7 +164,7 @@ def compare_algorithms(
     session_id: str = DEFAULT_SESSION_ID,
     topology_name: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Execute both Bellman-Ford and Floyd-Warshall on the same source and cross-validate."""
+    """Execute Bellman-Ford, Floyd-Warshall, and Dijkstra on the same source and cross-validate."""
     t0 = time.perf_counter()
     g = graph or get_active_graph(session_id)
     top_name = topology_name or get_active_topology_entry(session_id)["name"]
@@ -178,15 +182,34 @@ def compare_algorithms(
     fw_res = find_best_edge_server_fw(g, source)
     fw_time = (time.perf_counter() - t_fw0) * 1000.0
 
+    # 3. Dijkstra
+    t_dijk0 = time.perf_counter()
+    dijk_res = find_best_edge_server_dijkstra(g, source)
+    dijk_time = (time.perf_counter() - t_dijk0) * 1000.0
+
     bf_lat = bf_res.get("latency")
     fw_lat = fw_res.get("latency")
-    matched = (bf_lat is not None and fw_lat is not None and abs(bf_lat - fw_lat) < 1e-4)
+    dijk_lat = dijk_res.get("latency")
 
-    path = bf_res.get("path") or []
+    matched_bf_fw = (bf_lat is not None and fw_lat is not None and abs(bf_lat - fw_lat) < 1e-4)
+    three_way_matched = (
+        matched_bf_fw
+        and dijk_lat is not None
+        and abs(bf_lat - dijk_lat) < 1e-4
+        and bf_res.get("best_edge") == fw_res.get("best_edge") == dijk_res.get("best_edge")
+    )
+
+    path = bf_res.get("path") or dijk_res.get("path") or []
     path_edges = [{"from": path[i], "to": path[i + 1]} for i in range(len(path) - 1)]
 
-    total_ops = bf_res.get("operations", 0) + fw_res.get("operations", 0)
+    total_ops = bf_res.get("operations", 0) + fw_res.get("operations", 0) + dijk_res.get("operations", 0)
     total_time = (time.perf_counter() - t0) * 1000.0
+
+    max_lat_diff = 0.0
+    if bf_lat is not None and fw_lat is not None:
+        max_lat_diff = max(max_lat_diff, abs(bf_lat - fw_lat))
+    if bf_lat is not None and dijk_lat is not None:
+        max_lat_diff = max(max_lat_diff, abs(bf_lat - dijk_lat))
 
     payload = {
         "source": source,
@@ -213,10 +236,20 @@ def compare_algorithms(
             "operations": fw_res.get("operations", 0),
             "execution_time_ms": round(fw_time, 4),
         },
+        "dijkstra": {
+            "algorithm": "Dijkstra",
+            "complexity": "O((|V| + |E|) log |V|)",
+            "best_edge": dijk_res.get("best_edge"),
+            "latency": dijk_lat,
+            "path": dijk_res.get("path"),
+            "operations": dijk_res.get("operations", 0),
+            "execution_time_ms": round(dijk_time, 4),
+        },
         "agreement": {
-            "matched": matched,
-            "best_edge_match": bf_res.get("best_edge") == fw_res.get("best_edge"),
-            "latency_diff": round(abs((bf_lat or 0) - (fw_lat or 0)), 4),
+            "matched": three_way_matched,
+            "three_way_matched": three_way_matched,
+            "best_edge_match": (bf_res.get("best_edge") == fw_res.get("best_edge") == dijk_res.get("best_edge")),
+            "latency_diff": round(max_lat_diff, 4),
         },
         "topology_name": top_name,
     }

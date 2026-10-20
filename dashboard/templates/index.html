@@ -72,6 +72,14 @@
                 <small class="text-muted">APSP &bull; \(O(V^3)\)</small>
               </div>
             </label>
+            <label class="radio-label">
+              <input type="radio" name="algorithm" value="dijkstra" />
+              <span class="radio-custom"></span>
+              <div>
+                <strong>Dijkstra</strong>
+                <small class="text-muted">SSSP &bull; \(O((V + E) \log V)\)</small>
+              </div>
+            </label>
             <label class="radio-label radio-compare">
               <input type="radio" name="algorithm" value="compare" />
               <span class="radio-custom"></span>
@@ -211,6 +219,26 @@
                 <div class="compare-stat">
                   <span class="c-label">Complexity:</span>
                   <span class="c-val">\(O(V^3)\)</span>
+                </div>
+              </div>
+
+              <div class="compare-card dijk-card">
+                <div class="compare-card-title">Dijkstra (SSSP Heap)</div>
+                <div class="compare-stat">
+                  <span class="c-label">Latency:</span>
+                  <span class="c-val" id="cmp-dijk-lat">--</span>
+                </div>
+                <div class="compare-stat">
+                  <span class="c-label">Operations:</span>
+                  <span class="c-val" id="cmp-dijk-ops">--</span>
+                </div>
+                <div class="compare-stat">
+                  <span class="c-label">Time:</span>
+                  <span class="c-val" id="cmp-dijk-time">--</span>
+                </div>
+                <div class="compare-stat">
+                  <span class="c-label">Complexity:</span>
+                  <span class="c-val">\(O((V + E) \log V)\)</span>
                 </div>
               </div>
             </div>

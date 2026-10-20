@@ -445,7 +445,7 @@ body {
 
 .compare-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: 8px;
   margin-bottom: 8px;
 }
@@ -471,6 +471,10 @@ body {
 
 .fw-card .compare-card-title {
   color: #f87171;
+}
+
+.dijk-card .compare-card-title {
+  color: #10b981;
 }
 
 .compare-stat {
