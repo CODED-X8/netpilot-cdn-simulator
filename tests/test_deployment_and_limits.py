@@ -137,3 +137,16 @@ def test_vercel_wsgi_entrypoint_and_middleware():
     r_fallback = test_client.get("/api/index")
     assert r_fallback.status_code == 200
 
+    # Vercel query-based rewrite (?__path=$1)
+    r_query_root = test_client.get("/api/index?__path=")
+    assert r_query_root.status_code == 200
+    assert b"NetPilot" in r_query_root.data
+
+    r_query_net = test_client.get("/api/index?__path=api/network")
+    assert r_query_net.status_code == 200
+    assert "nodes" in r_query_net.get_json()
+
+    r_query_post = test_client.post("/api/index?__path=api/route", json={"user_id": "user_1", "algorithm": "dijkstra"})
+    assert r_query_post.status_code == 200
+    assert "path" in r_query_post.get_json()
+
