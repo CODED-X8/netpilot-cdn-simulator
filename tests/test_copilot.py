@@ -136,6 +136,25 @@ def test_number_grounding_verifier():
     assert "Verification Notice" in flagged_text
 
 
+def test_number_grounding_thousands_separators():
+    """Verify that thousands separators (e.g. 26,166.0) normalize and ground against float values."""
+    text = "The max flow is 26,166.0 Mbps with 1,000 operations and 53,641.6 total capacity."
+    nums = extract_numbers_from_text(text)
+    assert 26166.0 in nums
+    assert 1000.0 in nums
+    assert 53641.6 in nums
+
+    tool_data = {
+        "max_flow": 26166.0,
+        "operations": 1000,
+        "cut_capacity": 53641.6,
+    }
+    is_grounded, ungrounded, output_text = verify_number_grounding(text, [tool_data])
+    assert is_grounded is True
+    assert ungrounded == []
+    assert "Verification Notice" not in output_text
+
+
 # ---------------------------------------------------------
 # 5. Agent Loop with FakeLLMProvider
 # ---------------------------------------------------------

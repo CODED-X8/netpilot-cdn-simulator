@@ -1,0 +1,15 @@
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.git
+.gitignore
+.env
+docs/screenshots/
+*.db
+*.sqlite
+*.sqlite3
+.system_generated
+eval/results/eval_raw_responses.jsonl

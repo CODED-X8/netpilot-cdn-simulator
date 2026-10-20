@@ -1,11 +1,11 @@
 # NetPilot Evaluation Benchmark Summary
 
-**Date:** 2026-10-14 | **Provider:** fake | **Model:** fake-eval-model | **Dry-Run:** True
-**Test Set:** 35 templates | **Runs:** 3 | **Total Queries:** 420
+**Date:** 2026-10-20 | **Provider:** groq | **Model:** openai/gpt-oss-120b | **Dry-Run:** False
+**Test Set:** 10 templates | **Runs:** 1 | **Total Queries:** 40
 
 | Configuration | Accuracy (%) | Tool Accuracy (%) | Hallucination (%) | Latency p50 (ms) | Latency p95 (ms) | Cost / 1k Queries ($) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Plain LLM (Topology Text)** | 5.71% | 0.0% | 31.58% | 85.1 ms | 85.2 ms | $0.285 |
-| **LLM + RAG (Runbooks Only)** | 13.33% | 17.14% | 0.0% | 115.9 ms | 117.5 ms | $0.059 |
-| **LLM + Tools (Custom Engines)** | 61.9% | 71.43% | 0.0% | 89.8 ms | 287.2 ms | $0.073 |
-| **Full NetPilot (Tools + RAG + Verifier)** | 61.9% | 71.43% | 0.0% | 100.8 ms | 303.3 ms | $0.093 |
+| **Plain LLM (Topology Text)** | 90.0% | 0.0% | 25.61% | 20867.6 ms | 34567.3 ms | $1.470 |
+| **LLM + RAG (Runbooks Only)** | 20.0% | 0.0% | 43.88% | 14434.0 ms | 28672.6 ms | $0.716 |
+| **LLM + Tools (Custom Engines)** | 100.0% | 70.0% | 34.17% | 23078.7 ms | 35772.7 ms | $3.441 |
+| **Full NetPilot (Tools + RAG + Verifier)** | 90.0% | 60.0% | 30.77% | 21043.9 ms | 51612.5 ms | $0.676 |

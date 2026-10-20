@@ -75,6 +75,21 @@ Routing Foundation            NetPilot Autonomous AI         Advanced Algorithms
   - Hallucination tracking across all configurations.
   - LLMOps Dashboard Panel (`GET /api/llmops/stats`, token budget gauge, runbook coverage, and sanitized audit log).
 
+### Extensions: Advanced Engines & Resilience (Milestones X1 - X3) (Completed)
+- [x] **Milestone X1 — Dijkstra SSSP Engine & Binary Min-Heap**:
+  - Hand-written Dijkstra algorithm using standard library binary min-heap (`heapq`).
+  - Negative edge guard raising explicit `ValueError` on negative weights.
+  - 3-way shortest path agreement badge (`Compare Both`) validating Bellman-Ford == Floyd-Warshall == Dijkstra.
+  - Scalability benchmarks ($N=10..200$) and apples-to-apples All-Pairs Dijkstra vs. Floyd-Warshall.
+- [x] **Milestone X2 — Step-Through Algorithmic Visualizer**:
+  - Detailed step trace recording for Bellman-Ford passes and Floyd-Warshall intermediate pivots.
+  - Dashboard playback panel with Play/Pause, Step Next, Step Prev, and speed controls.
+  - Dynamic Vis.js edge highlighting and real-time distance delta table inspection.
+- [x] **Milestone X3 — Chaos Mode & Autonomous Self-Healing**:
+  - Background daemon periodically injecting random link/node failures at configurable intervals.
+  - Automated postmortem generation triggered on cascading failure thresholds.
+  - Auto-heal and reset engine restoring topologies to pristine baseline.
+
 ---
 
 ## Future Stretch Goals (Post-Review 2)

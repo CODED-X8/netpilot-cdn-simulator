@@ -285,22 +285,61 @@ def kill_edge(
     if not edges:
         raise ValueError("Cannot kill edge: graph has no links.")
 
-    target_u = u
-    target_v = v
+    target_u = None
+    target_v = None
 
     if edge_id:
-        # Parse edge_id format e.g. "u->v" or "u<->v"
-        sep = "<->" if "<->" in edge_id else "->"
-        parts = edge_id.split(sep)
-        if len(parts) == 2:
-            target_u, target_v = parts[0].strip(), parts[1].strip()
+        edge_str = str(edge_id).strip()
+        found_exact = False
+        for e in edges:
+            if getattr(e, "id", None) == edge_str:
+                target_u, target_v = e.u, e.v
+                found_exact = True
+                break
 
-    if target_u is None or target_v is None or not g.has_edge(target_u, target_v):
-        # Pick a random edge if not explicitly provided or invalid
+        if not found_exact:
+            if "<->" in edge_str:
+                parts = edge_str.split("<->")
+                if len(parts) == 2 and parts[0].strip() and parts[1].strip():
+                    p0, p1 = parts[0].strip(), parts[1].strip()
+                    if g.has_edge(p0, p1):
+                        target_u, target_v = p0, p1
+                    elif g.has_edge(p1, p0):
+                        target_u, target_v = p1, p0
+                    else:
+                        raise ValueError(f"Unknown edge '{edge_str}' in topology '{top_name}'. Link does not exist in either direction.")
+                else:
+                    raise ValueError(f"Malformed edge identifier '{edge_str}'. Expected format 'u<->v' or 'u->v'.")
+            elif "->" in edge_str:
+                parts = edge_str.split("->")
+                if len(parts) == 2 and parts[0].strip() and parts[1].strip():
+                    p0, p1 = parts[0].strip(), parts[1].strip()
+                    if g.has_edge(p0, p1):
+                        target_u, target_v = p0, p1
+                    elif g.has_edge(p1, p0):
+                        target_u, target_v = p1, p0
+                    else:
+                        raise ValueError(f"Unknown edge '{edge_str}' in topology '{top_name}'.")
+                else:
+                    raise ValueError(f"Malformed edge identifier '{edge_str}'. Expected format 'u<->v' or 'u->v'.")
+            else:
+                raise ValueError(f"Malformed edge identifier '{edge_str}'. Expected format 'u<->v' or 'u->v'.")
+    elif u is not None or v is not None:
+        if u is None or v is None:
+            raise ValueError(f"Both u and v must be specified to kill an edge (received u={u}, v={v}).")
+        u_str, v_str = str(u).strip(), str(v).strip()
+        if g.has_edge(u_str, v_str):
+            target_u, target_v = u_str, v_str
+        elif g.has_edge(v_str, u_str):
+            target_u, target_v = v_str, u_str
+        else:
+            raise ValueError(f"Unknown edge '{u_str}<->{v_str}' in topology '{top_name}'. Link does not exist in either direction.")
+    else:
+        # Explicit random failure when no target specified
         chosen = random.choice(edges)
         target_u, target_v = chosen.u, chosen.v
 
-    edge_obj = g.get_edge(target_u, target_v)
+    edge_obj = g.get_edge(target_u, target_v) or g.get_edge(target_v, target_u)
     latency = edge_obj.latency if edge_obj else 0.0
 
     # Cut link bidirectionally to represent physical severance
@@ -389,34 +428,72 @@ def what_if(
     # 3. Apply counterfactual removals on sim_graph
     removed_nodes_actual = []
     for nid in nodes_to_remove:
-        if sim_graph.has_node(nid):
-            # Remove incident edges first
-            incident = []
-            for u in list(sim_graph.adj.keys()):
-                for v in list(sim_graph.adj[u].keys()):
-                    if u == nid or v == nid:
-                        incident.append((u, v))
-            for u, v in incident:
-                sim_graph.remove_edge(u, v)
-            del sim_graph.nodes[nid]
-            if nid in sim_graph.adj:
-                del sim_graph.adj[nid]
-            removed_nodes_actual.append(nid)
+        node_id_str = str(nid).strip()
+        if not sim_graph.has_node(node_id_str):
+            raise ValueError(f"Unknown node '{node_id_str}' in topology '{top_name}'.")
+        # Remove incident edges first
+        incident = []
+        for u in list(sim_graph.adj.keys()):
+            for v in list(sim_graph.adj[u].keys()):
+                if u == node_id_str or v == node_id_str:
+                    incident.append((u, v))
+        for u, v in incident:
+            sim_graph.remove_edge(u, v)
+        del sim_graph.nodes[node_id_str]
+        if node_id_str in sim_graph.adj:
+            del sim_graph.adj[node_id_str]
+        removed_nodes_actual.append(node_id_str)
 
     removed_edges_actual = []
     for item in edges_to_remove:
+        target_u = None
+        target_v = None
         if isinstance(item, (list, tuple)) and len(item) == 2:
-            u, v = str(item[0]), str(item[1])
-        else:
-            sep = "<->" if "<->" in str(item) else "->"
-            parts = str(item).split(sep)
-            if len(parts) == 2:
-                u, v = parts[0].strip(), parts[1].strip()
+            u, v = str(item[0]).strip(), str(item[1]).strip()
+            if sim_graph.has_edge(u, v):
+                target_u, target_v = u, v
+            elif sim_graph.has_edge(v, u):
+                target_u, target_v = v, u
             else:
-                continue
-        if sim_graph.has_edge(u, v):
-            sim_graph.remove_edge(u, v, bidirectional=True)
-            removed_edges_actual.append(f"{u}<->{v}")
+                raise ValueError(f"Unknown edge '{u}<->{v}' in topology '{top_name}'. Link does not exist in either direction.")
+        else:
+            edge_str = str(item).strip()
+            found_exact = False
+            for e in sim_graph.get_edges():
+                if getattr(e, "id", None) == edge_str:
+                    target_u, target_v = e.u, e.v
+                    found_exact = True
+                    break
+            if not found_exact:
+                if "<->" in edge_str:
+                    parts = edge_str.split("<->")
+                    if len(parts) == 2 and parts[0].strip() and parts[1].strip():
+                        p0, p1 = parts[0].strip(), parts[1].strip()
+                        if sim_graph.has_edge(p0, p1):
+                            target_u, target_v = p0, p1
+                        elif sim_graph.has_edge(p1, p0):
+                            target_u, target_v = p1, p0
+                        else:
+                            raise ValueError(f"Unknown edge '{edge_str}' in topology '{top_name}'. Link does not exist in either direction.")
+                    else:
+                        raise ValueError(f"Malformed edge identifier '{edge_str}'. Expected format 'u<->v' or 'u->v'.")
+                elif "->" in edge_str:
+                    parts = edge_str.split("->")
+                    if len(parts) == 2 and parts[0].strip() and parts[1].strip():
+                        p0, p1 = parts[0].strip(), parts[1].strip()
+                        if sim_graph.has_edge(p0, p1):
+                            target_u, target_v = p0, p1
+                        elif sim_graph.has_edge(p1, p0):
+                            target_u, target_v = p1, p0
+                        else:
+                            raise ValueError(f"Unknown edge '{edge_str}' in topology '{top_name}'.")
+                    else:
+                        raise ValueError(f"Malformed edge identifier '{edge_str}'. Expected format 'u<->v' or 'u->v'.")
+                else:
+                    raise ValueError(f"Malformed edge identifier '{edge_str}'. Expected format 'u<->v' or 'u->v'.")
+
+        sim_graph.remove_edge(target_u, target_v, bidirectional=True)
+        removed_edges_actual.append(f"{target_u}<->{target_v}")
 
     # After computation
     if sim_graph.has_node(eval_source):

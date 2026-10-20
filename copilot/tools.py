@@ -29,8 +29,8 @@ class ResetNetworkArgs(BaseModel):
 
 
 class WhatIfArgs(BaseModel):
-    remove_nodes: Optional[List[str]] = Field(default_factory=list, description="List of node IDs to simulate removing.")
-    remove_edges: Optional[List[str]] = Field(default_factory=list, description="List of edge IDs to simulate removing (e.g. ['user_1<->edge_1']).")
+    remove_nodes: Optional[Union[List[str], str]] = Field(default_factory=list, description="List of node IDs to simulate removing.")
+    remove_edges: Optional[Union[List[str], str]] = Field(default_factory=list, description="List of edge IDs to simulate removing (e.g. ['user_1<->edge_1']).")
     source: Optional[str] = Field(None, description="Optional target user region to evaluate. Defaults to first user region.")
 
 
@@ -299,9 +299,15 @@ def execute_tool_call(
                 session_id=session_id,
             )
         elif function_name == "what_if":
+            rem_nodes = validated_args.get("remove_nodes") or []
+            if isinstance(rem_nodes, str):
+                rem_nodes = [rem_nodes]
+            rem_edges = validated_args.get("remove_edges") or []
+            if isinstance(rem_edges, str):
+                rem_edges = [rem_edges]
             res = net_service.what_if(
-                remove_nodes=validated_args.get("remove_nodes") or [],
-                remove_edges=validated_args.get("remove_edges") or [],
+                remove_nodes=rem_nodes,
+                remove_edges=rem_edges,
                 source=validated_args.get("source"),
                 session_id=session_id,
             )

@@ -2,7 +2,7 @@
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests: 66 Passed](https://img.shields.io/badge/tests-66%20passed-brightgreen.svg)]()
+[![Tests: 96 Passed](https://img.shields.io/badge/tests-96%20passed-brightgreen.svg)]()
 [![Docker: Ready](https://img.shields.io/badge/docker-multi--stage-blue.svg)]()
 
 A high-performance simulator and autonomous AI Copilot system modeling how Content Delivery Networks (CDNs) make optimal edge routing, capacity allocation, fault recovery, and incident mitigation decisions. Built for the **Design and Analysis of Algorithms (DAA)** curriculum.
@@ -73,8 +73,8 @@ DAA_PROJ/
 ├── runbooks/                   # Operational SOP runbooks
 │   ├── link_failure_runbook.md
 │   ├── congestion_runbook.md
-│   ├── cache_miss_storm_runbook.md
-│   ├── ddos_mitigation_runbook.md
+│   ├── latency_regression_runbook.md
+│   ├── regional_outage_runbook.md
 │   └── bad_topology_upload_runbook.md
 ├── copilot/                    # NetPilot AI Copilot
 │   ├── agent.py                # ReAct loop, delimiter isolation, confirmation gate
@@ -92,7 +92,7 @@ DAA_PROJ/
 │   ├── app.py                  # Flask web backend & REST API
 │   ├── templates/index.html    # Single-page interface & modals
 │   └── static/                 # Vis.js network visualization & CSS
-├── tests/                      # Automated pytest test suite (66 tests)
+├── tests/                      # Automated pytest test suite (96 tests)
 ├── Dockerfile                  # Production multi-stage Docker container
 ├── docker-compose.yml          # Containerized deployment
 ├── ARCHITECTURE.md             # Detailed system architecture document
@@ -179,11 +179,14 @@ Generates empirical CSV data and Matplotlib asymptotic complexity plots in `benc
 
 ## 🧪 Automated Testing Suite
 
-The test suite includes **66 automated pytest tests** covering:
+The test suite includes **96 automated pytest tests** covering:
 - Graph data structures, mutations, dynamic link failures.
 - Handcrafted 6-node ground truth routing verification.
 - Cross-validation between Bellman-Ford, Floyd-Warshall, and NetworkX across 50 random topologies.
 - Negative cycle detection.
+- Dijkstra Single-Source Shortest Path with binary heap.
+- Step-through visualizer trace mode.
+- Chaos mode automated failure injection and resilience.
 - Edmonds-Karp and Ford-Fulkerson max flow cross-validation against NetworkX.
 - JSON/CSV topology uploads with row-numbered error detection.
 - Copilot ReAct agent loop, number grounding verifier, and destructive confirmation gate.
@@ -196,7 +199,7 @@ To run the full suite:
 pytest -v
 ```
 
-All 66 tests execute in under 3 seconds with **100% pass rate**.
+All 96 tests execute in ~3.3 seconds with **100% pass rate**.
 
 ---
 

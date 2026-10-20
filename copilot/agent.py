@@ -111,6 +111,8 @@ def run_copilot_chat(
     provider_used: Optional[str] = None
 
     while step < MAX_TOOL_STEPS:
+        if step > 0 and custom_provider is None:
+            time.sleep(2.0)
         step += 1
 
         response: LLMResponse = provider.chat_complete(messages=messages, tools=COPILOT_TOOLS_OPENAI_SPEC)

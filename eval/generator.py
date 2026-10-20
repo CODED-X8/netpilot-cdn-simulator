@@ -16,7 +16,10 @@ Splits into 15 dev and 35 test templates (reporting only on test set).
 
 import json
 import os
+import sys
 from typing import Dict, List, Any
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from graph.network import Graph
 import services.network_service as net_service

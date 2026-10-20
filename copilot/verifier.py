@@ -9,11 +9,11 @@ import re
 from typing import Dict, List, Set, Any, Tuple, Optional
 
 
-NUMBER_REGEX = re.compile(r"(?<![a-zA-Z0-9_])[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?(?![a-zA-Z0-9_])")
+NUMBER_REGEX = re.compile(r"(?<![a-zA-Z0-9_])[-+]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:[eE][-+]?\d+)?(?![a-zA-Z0-9_])")
 
 
 def extract_numbers_from_text(text: str) -> List[float]:
-    """Extract standalone numeric tokens from text."""
+    """Extract standalone numeric tokens from text, normalizing thousands separators."""
     matches = NUMBER_REGEX.findall(text)
     numbers = []
     for m in matches:
@@ -21,7 +21,8 @@ def extract_numbers_from_text(text: str) -> List[float]:
         if m in ("", ".", "-", "+"):
             continue
         try:
-            val = float(m)
+            cleaned = m.replace(",", "")
+            val = float(cleaned)
             numbers.append(val)
         except ValueError:
             pass

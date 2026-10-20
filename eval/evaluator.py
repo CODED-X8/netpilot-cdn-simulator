@@ -25,6 +25,8 @@ import sys
 import time
 from typing import Dict, List, Any, Optional, Set, Tuple
 
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from copilot.agent import run_copilot_chat
 from copilot.llm_provider import FakeLLMProvider, LLMResponse, LLMToolCall, get_llm_provider
 from copilot.verifier import extract_numbers_from_text
@@ -214,6 +216,25 @@ class ConfigRunner:
                     "tokens_out": tokens_out,
                     "context_text": prompt,
                 }
+            else:
+                provider = get_llm_provider()
+                if provider is None:
+                    raise RuntimeError("Real LLM provider requested but no API key configured!")
+                llm_res = provider.chat_complete(
+                    messages=[{"role": "user", "content": prompt}],
+                    tools=None,
+                )
+                time.sleep(6.0)
+                latency_ms = round((time.time() - start_time) * 1000.0, 1)
+                return {
+                    "answer": llm_res.content or "",
+                    "tool_called": None,
+                    "confirmation_requested": False,
+                    "latency_ms": latency_ms,
+                    "tokens_in": llm_res.prompt_tokens,
+                    "tokens_out": llm_res.completion_tokens,
+                    "context_text": prompt,
+                }
 
         elif config == "llm_rag":
             # LLM + RAG only (no execution tools)
@@ -246,6 +267,26 @@ class ConfigRunner:
                     "tokens_out": tokens_out,
                     "context_text": prompt,
                 }
+            else:
+                provider = get_llm_provider()
+                if provider is None:
+                    raise RuntimeError("Real LLM provider requested but no API key configured!")
+                llm_res = provider.chat_complete(
+                    messages=[{"role": "user", "content": prompt}],
+                    tools=None,
+                )
+                time.sleep(6.0)
+                latency_ms = round((time.time() - start_time) * 1000.0, 1)
+                ans_str = llm_res.content or ""
+                return {
+                    "answer": ans_str,
+                    "tool_called": "search_history" if "runbook" in ans_str.lower() else None,
+                    "confirmation_requested": False,
+                    "latency_ms": latency_ms,
+                    "tokens_in": llm_res.prompt_tokens,
+                    "tokens_out": llm_res.completion_tokens,
+                    "context_text": prompt,
+                }
 
         elif config == "llm_tools":
             # LLM + Tools only (no RAG search, no verifier)
@@ -255,6 +296,8 @@ class ConfigRunner:
                 session_id=session_id,
                 custom_provider=fake_provider,
             )
+            if self.provider_mode != "fake":
+                time.sleep(6.0)
             latency_ms = round((time.time() - start_time) * 1000 + 75.0, 1)
             tools_used = chat_resp.get("tools_used", [])
             primary_tool = tools_used[0]["tool"] if tools_used else None
@@ -266,8 +309,8 @@ class ConfigRunner:
                 "tool_called": primary_tool,
                 "confirmation_requested": conf_req,
                 "latency_ms": latency_ms,
-                "tokens_in": chat_resp.get("prompt_tokens", 250),
-                "tokens_out": chat_resp.get("completion_tokens", 60),
+                "tokens_in": chat_resp.get("tokens", 250),
+                "tokens_out": chat_resp.get("tokens", 60),
                 "context_text": context_str,
             }
 
@@ -279,6 +322,8 @@ class ConfigRunner:
                 session_id=session_id,
                 custom_provider=fake_provider,
             )
+            if self.provider_mode != "fake":
+                time.sleep(6.0)
             latency_ms = round((time.time() - start_time) * 1000 + 90.0, 1)
             tools_used = chat_resp.get("tools_used", [])
             primary_tool = tools_used[0]["tool"] if tools_used else None
@@ -290,7 +335,7 @@ class ConfigRunner:
                 "tool_called": primary_tool,
                 "confirmation_requested": conf_req,
                 "latency_ms": latency_ms,
-                "tokens_in": chat_resp.get("prompt_tokens", 320),
+                "tokens_in": chat_resp.get("tokens", 320),
                 "tokens_out": chat_resp.get("completion_tokens", 75),
                 "context_text": context_str,
             }
@@ -399,6 +444,7 @@ def run_evaluation(
     spend_cap_usd: float = 5.0,
     resume: bool = False,
     auto_confirm: bool = False,
+    configs: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Execute complete evaluation harness across the 4 configurations."""
     os.makedirs(output_dir, exist_ok=True)
@@ -424,7 +470,8 @@ def run_evaluation(
     if limit is not None:
         test_questions = test_questions[:limit]
 
-    configs = ["plain_llm", "llm_rag", "llm_tools", "full_system"]
+    if configs is None:
+        configs = ["plain_llm", "llm_rag", "llm_tools", "full_system"]
     total_queries = len(test_questions) * runs * len(configs)
 
     # Estimate tokens & cost
@@ -442,10 +489,13 @@ def run_evaluation(
     else:
         active_prov = get_active_provider_name()
         provider_name = os.environ.get("LLM_PROVIDER") or (active_prov if active_prov != "offline" else "groq")
-        if provider_name == "groq":
-            model_name = os.environ.get("GROQ_MODEL") or os.environ.get("LLM_MODEL") or "llama-3.3-70b-versatile"
+        prov_obj = get_llm_provider()
+        if prov_obj:
+            model_name = getattr(prov_obj, "model", "openai/gpt-oss-120b")
+            if "groq" in getattr(prov_obj, "base_url", "").lower():
+                provider_name = "groq"
         else:
-            model_name = os.environ.get("LLM_MODEL", "gpt-4o-mini")
+            model_name = os.environ.get("GROQ_MODEL") or os.environ.get("LLM_MODEL") or "openai/gpt-oss-120b"
 
     today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
@@ -668,6 +718,7 @@ if __name__ == "__main__":
     parser.add_argument("--limit", type=int, default=None, help="Limit number of test templates (default: all)")
     parser.add_argument("--dry-run", action="store_true", default=True, help="Run using FakeLLMProvider")
     parser.add_argument("--real-run", dest="dry_run", action="store_false", help="Run against real live LLM API")
+    parser.add_argument("--configs", nargs="+", default=None, help="Configurations to evaluate (default: all 4)")
     parser.add_argument("--spend-cap", type=float, default=5.0, help="Maximum spend cap in USD (default: 5.0)")
     parser.add_argument("--resume", action="store_true", help="Resume from partial runs in output directory")
     parser.add_argument("--yes", "-y", action="store_true", help="Auto-confirm real run prompt")
@@ -682,4 +733,5 @@ if __name__ == "__main__":
         spend_cap_usd=args.spend_cap,
         resume=args.resume,
         auto_confirm=args.yes,
+        configs=args.configs,
     )

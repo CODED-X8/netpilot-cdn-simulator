@@ -8,6 +8,8 @@ Configured by environment variables:
 
 import os
 import json
+import re
+import time
 import urllib.request
 import urllib.error
 from typing import Dict, List, Optional, Any, Tuple
@@ -133,40 +135,56 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             method="POST",
         )
 
-        try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-
-            choice = data["choices"][0]["message"]
-            content = choice.get("content")
-
-            tool_calls = []
-            if "tool_calls" in choice and choice["tool_calls"]:
-                for tc in choice["tool_calls"]:
-                    fn_name = tc["function"]["name"]
+        max_retries = 4
+        backoff_sec = 6.0
+        data = None
+        for attempt in range(max_retries + 1):
+            try:
+                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                break
+            except Exception as e:
+                if isinstance(e, urllib.error.HTTPError) and e.code == 429 and attempt < max_retries:
+                    wait_sec = backoff_sec
                     try:
-                        args = json.loads(tc["function"]["arguments"])
+                        err_body = e.read().decode("utf-8", errors="replace")
+                        m = re.search(r"try again in (\d+(?:\.\d+)?)s", err_body)
+                        if m:
+                            wait_sec = max(float(m.group(1)) + 1.0, wait_sec)
                     except Exception:
-                        args = {}
-                    tool_calls.append(LLMToolCall(tc["id"], fn_name, args))
+                        pass
+                    time.sleep(wait_sec)
+                    backoff_sec *= 1.5
+                    continue
+                if isinstance(e, urllib.error.HTTPError):
+                    err_body = e.read().decode("utf-8", errors="replace")
+                    raise RuntimeError(f"LLM API HTTP {e.code}: {err_body}")
+                raise RuntimeError(f"LLM API request failed: {str(e)}")
 
-            usage = data.get("usage", {})
-            provider_type = "groq" if "groq" in self.base_url.lower() else "openai"
+        choice = data["choices"][0]["message"]
+        content = choice.get("content")
 
-            return LLMResponse(
-                content=content,
-                tool_calls=tool_calls,
-                prompt_tokens=usage.get("prompt_tokens", 0),
-                completion_tokens=usage.get("completion_tokens", 0),
-                model_name=self.model,
-                provider_name=provider_type,
-            )
+        tool_calls = []
+        if "tool_calls" in choice and choice["tool_calls"]:
+            for tc in choice["tool_calls"]:
+                fn_name = tc["function"]["name"]
+                try:
+                    args = json.loads(tc["function"]["arguments"])
+                except Exception:
+                    args = {}
+                tool_calls.append(LLMToolCall(tc["id"], fn_name, args))
 
-        except Exception as e:
-            if isinstance(e, urllib.error.HTTPError):
-                err_body = e.read().decode("utf-8", errors="replace")
-                raise RuntimeError(f"LLM API HTTP {e.code}: {err_body}")
-            raise RuntimeError(f"LLM API request failed: {str(e)}")
+        usage = data.get("usage", {})
+        provider_type = "groq" if "groq" in self.base_url.lower() else "openai"
+
+        return LLMResponse(
+            content=content,
+            tool_calls=tool_calls,
+            prompt_tokens=usage.get("prompt_tokens", 0),
+            completion_tokens=usage.get("completion_tokens", 0),
+            model_name=self.model,
+            provider_name=provider_type,
+        )
 
 
 class FakeLLMProvider(BaseLLMProvider):
@@ -303,12 +321,15 @@ class FakeLLMProvider(BaseLLMProvider):
 
         if "fails" in user_text or "what if" in user_text or "what happens if" in user_text:
             # Extract target edge or node if present
-            edge = "user_1<->edge_1"
+            target_edge = "user_1<->edge_1"
             for token in user_text.split():
-                if "edge_" in token or "user_" in token:
-                    edge = token.strip("?,.:;\"'")
+                clean_tok = token.strip("?,.:;\"'")
+                if "<->" in clean_tok or "->" in clean_tok:
+                    target_edge = clean_tok
+                elif clean_tok.startswith("edge_") or clean_tok.startswith("ab"):
+                    target_edge = f"user_1<->{clean_tok}"
             return LLMResponse(
-                tool_calls=[LLMToolCall("call_what_if", "what_if", {"remove_edges": [edge], "source": "user_1"})],
+                tool_calls=[LLMToolCall("call_what_if", "what_if", {"remove_edges": [target_edge], "source": "user_1"})],
                 prompt_tokens=180,
                 completion_tokens=30,
             )
@@ -350,8 +371,9 @@ class FakeLLMProvider(BaseLLMProvider):
         elif "kill" in user_text:
             edge = "user_1<->edge_1"
             for token in user_text.split():
-                if "edge_" in token or "user_" in token:
-                    edge = token.strip("?,.:;\"'")
+                clean_tok = token.strip("?,.:;\"'")
+                if "<->" in clean_tok or "->" in clean_tok:
+                    edge = clean_tok
             return LLMResponse(
                 tool_calls=[LLMToolCall("call_kill", "kill_edge", {"edge_id": edge, "confirmed": False})],
                 prompt_tokens=150,

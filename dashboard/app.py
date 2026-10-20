@@ -9,6 +9,7 @@ import os
 import sys
 import html
 import csv
+import json
 from typing import Dict, Any, Optional, List
 
 from flask import Flask, render_template, jsonify, request, send_file
