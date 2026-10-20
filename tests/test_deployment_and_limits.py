@@ -110,3 +110,30 @@ def test_copilot_chat_rate_limit_endpoint(monkeypatch):
     assert r3.status_code == 429
     assert "Retry-After" in r3.headers
     assert "Rate limit exceeded" in r3.get_json()["error"]
+
+
+def test_vercel_wsgi_entrypoint_and_middleware():
+    """Verify api/index.py exports WSGI app and handles Vercel rewrite paths."""
+    from api.index import app as vercel_app
+    test_client = vercel_app.test_client()
+
+    # Direct root hit
+    r_root = test_client.get("/")
+    assert r_root.status_code == 200
+
+    # Vercel rewrite to /api/index with original path in x-matched-path
+    r_index_rewritten = test_client.get("/api/index", headers={"x-matched-path": "/"})
+    assert r_index_rewritten.status_code == 200
+    assert b"NetPilot" in r_index_rewritten.data
+
+    # Vercel rewrite for an API endpoint
+    r_api_rewritten = test_client.get("/api/index", headers={"x-matched-path": "/api/network"})
+    assert r_api_rewritten.status_code == 200
+    data = r_api_rewritten.get_json()
+    assert "nodes" in data
+    assert "edges" in data
+
+    # Vercel fallback without header
+    r_fallback = test_client.get("/api/index")
+    assert r_fallback.status_code == 200
+

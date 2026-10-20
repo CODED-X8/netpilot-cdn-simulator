@@ -156,6 +156,9 @@ def format_graph_for_vis(g: Graph) -> Dict[str, Any]:
 
 
 @app.route("/")
+@app.route("/api/index")
+@app.route("/api/index.py")
+@app.route("/index")
 def index():
     """Render main dashboard interface."""
     return render_template("index.html")
