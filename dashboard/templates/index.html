@@ -251,6 +251,97 @@
               <span class="text-muted">Select a user region above</span>
             </div>
           </div>
+
+          <!-- Explain This Run Trigger Button -->
+          <div style="margin-top: 14px;">
+            <button id="btn-explain-run" class="btn btn-primary" style="width: 100%; background: linear-gradient(135deg, #f59e0b, #d97706); font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px;">
+              <span>🔍 Explain This Run (Step-Through)</span>
+            </button>
+          </div>
+        </section>
+
+        <!-- 5. Step-Through Visualizer ("Explain this run") Panel -->
+        <section id="explain-panel" class="panel explain-panel" style="display: none; border-color: #f59e0b;">
+          <div class="explain-header">
+            <div class="explain-title-row">
+              <span class="explain-title">Explain This Run</span>
+              <span id="explain-algo-badge" class="badge badge-info" style="font-size: 0.72rem; padding: 2px 6px;">Bellman-Ford</span>
+            </div>
+            <button id="btn-close-explain" class="btn-icon" title="Close visualizer" style="font-size: 1.1rem; color: var(--text-muted); cursor: pointer; background: transparent; border: none;">&times;</button>
+          </div>
+
+          <!-- Warning for >30 nodes -->
+          <div id="explain-limit-warning" class="explain-warning" style="display: none;">
+            ⚠️ <strong>Topology Limit Exceeded:</strong> Step-through visualizer is limited to topologies with &le; 30 nodes. Current topology has <span id="explain-current-nodes">0</span> nodes. Switch to a smaller topology to explain this run.
+          </div>
+
+          <div id="explain-content" class="explain-content">
+            <!-- Algorithm Selector inside visualizer -->
+            <div class="explain-algo-select" style="margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem;">
+              <span class="text-muted">Trace Algorithm:</span>
+              <div style="display: flex; gap: 10px;">
+                <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                  <input type="radio" name="trace-algo-toggle" value="bellman_ford" checked /> Bellman-Ford
+                </label>
+                <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                  <input type="radio" name="trace-algo-toggle" value="floyd_warshall" /> Floyd-Warshall
+                </label>
+              </div>
+            </div>
+
+            <!-- Controls Toolbar -->
+            <div class="explain-controls">
+              <button id="trace-btn-first" class="btn-ctrl" title="First step">⏮</button>
+              <button id="trace-btn-prev" class="btn-ctrl" title="Previous step">◀</button>
+              <button id="trace-btn-play" class="btn-ctrl btn-ctrl-play" title="Play / Pause">▶ Play</button>
+              <button id="trace-btn-next" class="btn-ctrl" title="Next step">▶</button>
+              <button id="trace-btn-last" class="btn-ctrl" title="Last step">⏭</button>
+              <select id="trace-speed" class="trace-speed-select" title="Playback speed">
+                <option value="1000">0.5x</option>
+                <option value="500" selected>1x</option>
+                <option value="250">2x</option>
+                <option value="80">5x</option>
+              </select>
+            </div>
+
+            <!-- Scrubber slider & step counter -->
+            <div class="explain-scrubber-row">
+              <input type="range" id="trace-scrubber" min="0" max="0" value="0" class="trace-scrubber" />
+              <div class="trace-step-label">
+                Step <strong id="trace-step-curr">0</strong> of <strong id="trace-step-total">0</strong>
+              </div>
+            </div>
+
+            <!-- Current Step Narrative Explanation Box -->
+            <div class="explain-step-card">
+              <div class="explain-step-header">
+                <span id="trace-step-badge" class="trace-badge">Pass 1</span>
+                <span id="trace-step-status" class="trace-status-pill status-improved">⚡ Distance Improved</span>
+              </div>
+              <div id="trace-step-explanation" class="trace-explanation-text">
+                Click 'Play' or 'Next' to step through relaxation operations.
+              </div>
+            </div>
+
+            <!-- Live Distance Table -->
+            <div class="explain-table-wrap">
+              <div class="explain-table-title">Current Distance Table from Source:</div>
+              <div class="explain-table-scroll">
+                <table class="explain-table">
+                  <thead>
+                    <tr>
+                      <th>Node</th>
+                      <th>Distance</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="trace-table-body">
+                    <!-- Populated via JS -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         </section>
       </div>
 

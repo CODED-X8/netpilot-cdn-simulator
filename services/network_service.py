@@ -564,3 +564,73 @@ def find_bottleneck(
     )
 
     return payload
+
+
+def explain_route_trace(
+    source: str,
+    algo: str = "bellman_ford",
+    graph: Optional[Graph] = None,
+    session_id: str = DEFAULT_SESSION_ID,
+) -> Dict[str, Any]:
+    """Execute Bellman-Ford or Floyd-Warshall with step-by-step tracing for explainability.
+
+    Limits execution to topologies of at most 30 nodes.
+    """
+    g = graph or get_active_graph(session_id)
+
+    if len(g) > 30:
+        raise ValueError(
+            f"Step-through visualizer is limited to topologies with at most 30 nodes (current topology has {len(g)} nodes)."
+        )
+
+    if not g.has_node(source):
+        raise ValueError(f"Source node '{source}' does not exist in active topology.")
+
+    algo_norm = algo.lower().strip()
+    if algo_norm in ("bellman_ford", "bf"):
+        bf_res = bellman_ford(g, source, detect_negative_cycle=True, early_stopping=False, trace_mode=True)
+        edge_servers = g.get_nodes_by_type("edge_server")
+        best_edge_id = None
+        min_lat = float("inf")
+        for es in edge_servers:
+            dist = bf_res.distances.get(es.id, float("inf"))
+            if dist < min_lat:
+                min_lat = dist
+                best_edge_id = es.id
+        return {
+            "algorithm": "Bellman-Ford",
+            "source": source,
+            "best_edge": best_edge_id,
+            "latency": min_lat if min_lat != float("inf") else None,
+            "path": bf_res.get_path(best_edge_id) if best_edge_id else None,
+            "node_count": len(g),
+            "edge_count": g.edge_count(),
+            "total_steps": len(bf_res.trace),
+            "steps": bf_res.trace,
+            "final_distances": {k: (v if v != float("inf") else None) for k, v in bf_res.distances.items()},
+        }
+    elif algo_norm in ("floyd_warshall", "fw"):
+        fw_res = floyd_warshall(g, detect_negative_cycle=True, trace_mode=True, source_focus=source)
+        edge_servers = g.get_nodes_by_type("edge_server")
+        best_edge_id = None
+        min_lat = float("inf")
+        for es in edge_servers:
+            dist = fw_res.get_distance(source, es.id)
+            if dist < min_lat:
+                min_lat = dist
+                best_edge_id = es.id
+        return {
+            "algorithm": "Floyd-Warshall",
+            "source": source,
+            "best_edge": best_edge_id,
+            "latency": min_lat if min_lat != float("inf") else None,
+            "path": fw_res.get_path(source, best_edge_id) if best_edge_id else None,
+            "node_count": len(g),
+            "edge_count": g.edge_count(),
+            "total_steps": len(fw_res.trace),
+            "steps": fw_res.trace,
+            "final_distances": {k: (v if v != float("inf") else None) for k, v in fw_res.get_distance_dict(source).items()},
+        }
+    else:
+        raise ValueError(f"Trace mode is supported for 'bellman_ford' and 'floyd_warshall' (got '{algo}').")
+

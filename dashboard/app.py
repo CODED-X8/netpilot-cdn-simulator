@@ -221,6 +221,30 @@ def compute_route():
         return jsonify({"error": str(e)}), 400
 
 
+@app.route("/api/routing/trace", methods=["POST", "GET"])
+def get_routing_trace_api():
+    """Retrieve step-by-step trace for Bellman-Ford or Floyd-Warshall on topologies <= 30 nodes."""
+    session_id = _get_session_id()
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+    else:
+        data = request.args
+
+    user_id = data.get("user_id") or data.get("source")
+    algorithm = data.get("algorithm", "bellman_ford").lower()
+
+    if not user_id:
+        return jsonify({"error": "Missing user_id / source parameter"}), 400
+
+    try:
+        result = net_service.explain_route_trace(source=user_id, algo=algorithm, session_id=session_id)
+        return jsonify(result)
+    except ValueError as ve:
+        return jsonify({"error": str(ve)}), 400
+    except Exception as e:
+        return jsonify({"error": f"Failed to generate trace: {str(e)}"}), 500
+
+
 @app.route("/api/max-flow", methods=["POST"])
 def compute_max_flow_api():
     """Execute max flow computation or dual comparison (Edmonds-Karp vs Ford-Fulkerson)."""

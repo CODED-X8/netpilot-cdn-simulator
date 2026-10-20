@@ -24,6 +24,7 @@ class FloydWarshallResult:
         next_matrix: List[List[Optional[int]]],
         operations: int,
         has_negative_cycle: bool = False,
+        trace: Optional[List[Dict[str, Any]]] = None,
     ):
         self.nodes = nodes
         self.node_to_idx = node_to_idx
@@ -32,6 +33,7 @@ class FloydWarshallResult:
         self.next_node = next_matrix
         self.operations = operations
         self.has_negative_cycle = has_negative_cycle
+        self.trace = trace or []
 
     def get_distance(self, u: str, v: str) -> float:
         """Get shortest distance from node u to node v."""
@@ -93,10 +95,20 @@ class FloydWarshallResult:
             }
         return res
 
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "matrix": self.to_matrix_dict(),
+            "operations": self.operations,
+            "has_negative_cycle": self.has_negative_cycle,
+            "trace": self.trace,
+        }
+
 
 def floyd_warshall(
     graph: Graph,
     detect_negative_cycle: bool = True,
+    trace_mode: bool = False,
+    source_focus: Optional[str] = None,
 ) -> FloydWarshallResult:
     """Compute all-pairs shortest paths using the Floyd-Warshall algorithm.
 
@@ -106,9 +118,11 @@ def floyd_warshall(
     Args:
         graph: Graph instance.
         detect_negative_cycle: If True, checks diagonal for negative values.
+        trace_mode: If True, records each step (k index, pair examined, distances, improvement).
+        source_focus: Optional node ID to prioritize distance snapshots in trace.
 
     Returns:
-        FloydWarshallResult with distance matrix, path reconstruction, and op count.
+        FloydWarshallResult with distance matrix, path reconstruction, op count, and optional trace.
 
     Raises:
         NegativeCycleException: If a negative-weight cycle is detected.
@@ -136,18 +150,54 @@ def floyd_warshall(
             next_node[u_idx][v_idx] = v_idx
 
     operations = 0
+    trace: List[Dict[str, Any]] = []
 
     # Floyd-Warshall Triple Nested Loop
     for k in range(n):
+        k_node = node_ids[k]
         for i in range(n):
+            u_node = node_ids[i]
             for j in range(n):
+                v_node = node_ids[j]
                 operations += 1  # 1 comparison / relaxation check
+
+                dist_before = dist[i][j]
+                improved = False
+
                 # Check if path through k is shorter
                 if dist[i][k] != float("inf") and dist[k][j] != float("inf"):
                     new_dist = dist[i][k] + dist[k][j]
                     if new_dist < dist[i][j]:
                         dist[i][j] = new_dist
                         next_node[i][j] = next_node[i][k]
+                        improved = True
+
+                if trace_mode:
+                    is_focus = (source_focus is None) or (u_node == source_focus)
+                    if improved or (is_focus and (dist[i][k] != float("inf") or dist[k][j] != float("inf"))):
+                        explanation = (
+                            f"k={k_node}: Relaxed ({u_node} -> {v_node}) via intermediate '{k_node}'. "
+                            f"Distance improved from {dist_before if dist_before != float('inf') else '∞'} to {dist[i][j]:.1f} ms."
+                            if improved else
+                            f"k={k_node}: Evaluated ({u_node} -> {v_node}) through '{k_node}'. No improvement (current {dist_before:.1f} ms)."
+                        )
+                        focus_idx = node_to_idx.get(source_focus, i) if source_focus else i
+                        row_distances = {
+                            node_ids[idx]: (dist[focus_idx][idx] if dist[focus_idx][idx] != float("inf") else None)
+                            for idx in range(n)
+                        }
+                        trace.append({
+                            "k_index": k + 1,
+                            "k_node": k_node,
+                            "pair": {"u": u_node, "v": v_node},
+                            "edge": {"u": u_node, "v": v_node, "weight": dist[i][j] if dist[i][j] != float("inf") else None},
+                            "intermediate": k_node,
+                            "dist_before": dist_before if dist_before != float("inf") else None,
+                            "dist_after": dist[i][j] if dist[i][j] != float("inf") else None,
+                            "improved": improved,
+                            "distances": row_distances,
+                            "explanation": explanation,
+                        })
 
     # Negative cycle check: any diagonal entry < 0
     has_negative_cycle = False
@@ -166,6 +216,7 @@ def floyd_warshall(
         next_matrix=next_node,
         operations=operations,
         has_negative_cycle=has_negative_cycle,
+        trace=trace if trace_mode else None,
     )
 
 

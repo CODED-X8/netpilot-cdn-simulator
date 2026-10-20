@@ -26,12 +26,14 @@ class BellmanFordResult:
         predecessors: Dict[str, Optional[str]],
         operations: int,
         has_negative_cycle: bool = False,
+        trace: Optional[List[Dict[str, Any]]] = None,
     ):
         self.source = source
         self.distances = distances
         self.predecessors = predecessors
         self.operations = operations
         self.has_negative_cycle = has_negative_cycle
+        self.trace = trace or []
 
     def get_path(self, target: str) -> Optional[List[str]]:
         """Reconstruct shortest path from source to target.
@@ -71,6 +73,7 @@ class BellmanFordResult:
             "distances": self.distances,
             "operations": self.operations,
             "has_negative_cycle": self.has_negative_cycle,
+            "trace": self.trace,
         }
 
 
@@ -79,6 +82,7 @@ def bellman_ford(
     source: str,
     detect_negative_cycle: bool = True,
     early_stopping: bool = False,
+    trace_mode: bool = False,
 ) -> BellmanFordResult:
     """Compute single-source shortest paths from source using Bellman-Ford.
 
@@ -88,9 +92,10 @@ def bellman_ford(
         detect_negative_cycle: If True, executes the |V|-th pass to catch negative cycles.
         early_stopping: If True, terminates early if no relaxations occur in an iteration.
                         Default False ensures strict O(|V| * |E|) operation counting.
+        trace_mode: If True, records each step (pass, edge, distances before/after, improvement).
 
     Returns:
-        BellmanFordResult containing distances, predecessor map, and operation count.
+        BellmanFordResult containing distances, predecessor map, operation count, and optional trace.
 
     Raises:
         ValueError: If source node does not exist in graph.
@@ -109,6 +114,7 @@ def bellman_ford(
     distances[source] = 0.0
 
     operations = 0
+    trace: List[Dict[str, Any]] = []
 
     # Step 1: Relax edges |V| - 1 times
     for iteration in range(num_vertices - 1):
@@ -117,11 +123,40 @@ def bellman_ford(
             operations += 1  # 1 edge examination / comparison
             u, v, weight = edge.u, edge.v, edge.latency
 
+            dist_v_before = distances[v]
+            improved = False
+
             if distances[u] != float("inf"):
                 if distances[u] + weight < distances[v]:
                     distances[v] = distances[u] + weight
                     predecessors[v] = u
                     any_updated = True
+                    improved = True
+
+            if trace_mode:
+                explanation = (
+                    f"Pass {iteration + 1}: Relaxed ({u} -> {v}, weight {weight:.1f}). "
+                    f"Distance to '{v}' improved from {dist_v_before if dist_v_before != float('inf') else '∞'} "
+                    f"to {distances[v]:.1f} ms."
+                    if improved else
+                    (
+                        f"Pass {iteration + 1}: Examined ({u} -> {v}, weight {weight:.1f}). "
+                        f"No improvement (dist[{v}]={dist_v_before if dist_v_before != float('inf') else '∞'} "
+                        f"<= dist[{u}]={distances[u]:.1f} + {weight:.1f})."
+                        if distances[u] != float("inf") else
+                        f"Pass {iteration + 1}: Skipped ({u} -> {v}). Source '{u}' is currently unreachable (dist = ∞)."
+                    )
+                )
+                trace.append({
+                    "pass": iteration + 1,
+                    "edge": {"u": u, "v": v, "weight": weight},
+                    "dist_u": distances[u] if distances[u] != float("inf") else None,
+                    "dist_v_before": dist_v_before if dist_v_before != float("inf") else None,
+                    "dist_v_after": distances[v] if distances[v] != float("inf") else None,
+                    "improved": improved,
+                    "distances": {k: (val if val != float("inf") else None) for k, val in distances.items()},
+                    "explanation": explanation,
+                })
 
         if early_stopping and not any_updated:
             break
@@ -146,6 +181,7 @@ def bellman_ford(
         predecessors=predecessors,
         operations=operations,
         has_negative_cycle=False,
+        trace=trace if trace_mode else None,
     )
 
 

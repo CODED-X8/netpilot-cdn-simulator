@@ -1410,7 +1410,370 @@ if (btnCloseLLMOps && llmopsModal) {
   });
 }
 
+// ================= STEP-THROUGH VISUALIZER ("EXPLAIN THIS RUN") =================
+let traceData = null;
+let currentTraceIndex = 0;
+let tracePlaybackTimer = null;
+let lastHighlightedTraceEdgeId = null;
+let lastHighlightedTraceNodeIds = [];
+
+const btnExplainRun = document.getElementById("btn-explain-run");
+const explainPanel = document.getElementById("explain-panel");
+const btnCloseExplain = document.getElementById("btn-close-explain");
+const explainAlgoBadge = document.getElementById("explain-algo-badge");
+const explainLimitWarning = document.getElementById("explain-limit-warning");
+const explainCurrentNodes = document.getElementById("explain-current-nodes");
+const explainContent = document.getElementById("explain-content");
+const traceAlgoRadios = document.querySelectorAll("input[name='trace-algo-toggle']");
+const traceBtnFirst = document.getElementById("trace-btn-first");
+const traceBtnPrev = document.getElementById("trace-btn-prev");
+const traceBtnPlay = document.getElementById("trace-btn-play");
+const traceBtnNext = document.getElementById("trace-btn-next");
+const traceBtnLast = document.getElementById("trace-btn-last");
+const traceSpeedSelect = document.getElementById("trace-speed");
+const traceScrubber = document.getElementById("trace-scrubber");
+const traceStepCurr = document.getElementById("trace-step-curr");
+const traceStepTotal = document.getElementById("trace-step-total");
+const traceStepBadge = document.getElementById("trace-step-badge");
+const traceStepStatus = document.getElementById("trace-step-status");
+const traceStepExplanation = document.getElementById("trace-step-explanation");
+const traceTableBody = document.getElementById("trace-table-body");
+
+function getTraceSelectedAlgo() {
+  let val = "bellman_ford";
+  traceAlgoRadios.forEach((r) => {
+    if (r.checked) val = r.value;
+  });
+  return val;
+}
+
+function clearTraceStepHighlight() {
+  if (lastHighlightedTraceEdgeId && rawNetworkData) {
+    const orig = rawNetworkData.edges.find((e) => e.id === lastHighlightedTraceEdgeId);
+    if (orig && edgesDataSet) {
+      edgesDataSet.update({
+        id: lastHighlightedTraceEdgeId,
+        label: "",
+        color: orig.color,
+        width: 1.5,
+      });
+    }
+    lastHighlightedTraceEdgeId = null;
+  }
+  if (lastHighlightedTraceNodeIds.length > 0 && nodesDataSet) {
+    lastHighlightedTraceNodeIds.forEach((nid) => {
+      nodesDataSet.update({ id: nid, shadow: { enabled: false } });
+    });
+    lastHighlightedTraceNodeIds = [];
+  }
+}
+
+function stopTracePlayback() {
+  if (tracePlaybackTimer) {
+    clearInterval(tracePlaybackTimer);
+    tracePlaybackTimer = null;
+  }
+  if (traceBtnPlay) {
+    traceBtnPlay.textContent = "▶ Play";
+    traceBtnPlay.classList.remove("btn-ctrl-playing");
+  }
+}
+
+function closeTraceVisualizer() {
+  stopTracePlayback();
+  clearTraceStepHighlight();
+  if (explainPanel) explainPanel.style.display = "none";
+  // Restore optimal route highlight if we had one
+  if (lastRouteState && lastRouteState.path) {
+    highlightRoute(lastRouteState.path);
+  }
+}
+
+async function loadAndOpenTrace() {
+  stopTracePlayback();
+
+  const userId = selectedUserId || (userSelect ? userSelect.value : null);
+  if (!userId) {
+    alert("Please select a User Region first (click any teal node on the canvas or choose from the dropdown) to explain its routing run.");
+    return;
+  }
+
+  const nodeCount = rawNetworkData && rawNetworkData.nodes ? rawNetworkData.nodes.length : 0;
+  explainPanel.style.display = "block";
+
+  if (nodeCount > 30) {
+    explainLimitWarning.style.display = "block";
+    explainCurrentNodes.textContent = nodeCount;
+    explainContent.style.display = "none";
+    return;
+  }
+
+  explainLimitWarning.style.display = "none";
+  explainContent.style.display = "block";
+
+  const algo = getTraceSelectedAlgo();
+  explainAlgoBadge.textContent = algo === "floyd_warshall" ? "Floyd-Warshall" : "Bellman-Ford";
+
+  traceStepExplanation.textContent = "Computing execution trace...";
+
+  try {
+    const res = await fetch("/api/routing/trace", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: userId, algorithm: algo }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      explainLimitWarning.style.display = "block";
+      explainLimitWarning.innerHTML = `⚠️ <strong>Error:</strong> ${data.error || "Failed to load trace."}`;
+      explainContent.style.display = "none";
+      return;
+    }
+
+    traceData = data;
+    currentTraceIndex = 0;
+    const totalSteps = traceData.steps ? traceData.steps.length : 0;
+
+    traceScrubber.min = 0;
+    traceScrubber.max = totalSteps > 0 ? totalSteps - 1 : 0;
+    traceScrubber.value = 0;
+
+    if (totalSteps > 0) {
+      renderTraceStep(0);
+    } else {
+      traceStepExplanation.textContent = "No relaxation steps were required for this topology.";
+      traceStepCurr.textContent = 0;
+      traceStepTotal.textContent = 0;
+      traceTableBody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:10px; color:var(--text-muted);">No steps recorded.</td></tr>`;
+    }
+  } catch (err) {
+    console.error("Failed to load trace:", err);
+    explainLimitWarning.style.display = "block";
+    explainLimitWarning.textContent = `⚠️ Network error loading trace: ${err.message}`;
+    explainContent.style.display = "none";
+  }
+}
+
+function renderTraceStep(idx) {
+  if (!traceData || !traceData.steps || traceData.steps.length === 0) return;
+  if (idx < 0) idx = 0;
+  if (idx >= traceData.steps.length) idx = traceData.steps.length - 1;
+
+  currentTraceIndex = idx;
+  traceScrubber.value = idx;
+  traceStepCurr.textContent = idx + 1;
+  traceStepTotal.textContent = traceData.steps.length;
+
+  const step = traceData.steps[idx];
+
+  // Update Pass / k badge
+  if (step.pass !== undefined) {
+    traceStepBadge.textContent = `Pass ${step.pass}`;
+  } else if (step.k_node !== undefined) {
+    traceStepBadge.textContent = `k = ${step.k_node} (#${step.k_index})`;
+  } else {
+    traceStepBadge.textContent = `Step ${idx + 1}`;
+  }
+
+  // Update Status Pill
+  if (step.improved) {
+    traceStepStatus.className = "trace-status-pill status-improved";
+    traceStepStatus.textContent = "⚡ Distance Improved";
+  } else {
+    traceStepStatus.className = "trace-status-pill status-noop";
+    traceStepStatus.textContent = "Examined (No Change)";
+  }
+
+  // Explanation Text
+  traceStepExplanation.textContent = step.explanation || "Step evaluated.";
+
+  // Render Distance Table
+  renderDistanceTable(step);
+
+  // Vis.js Graph Edge Highlighting
+  highlightTraceCanvas(step);
+}
+
+function renderDistanceTable(step) {
+  if (!step || !step.distances) return;
+
+  const distances = step.distances;
+
+  // Determine which node was updated in this step
+  let updatedNodeId = null;
+  if (step.improved) {
+    if (step.edge && step.edge.v) {
+      updatedNodeId = step.edge.v;
+    } else if (step.pair && step.pair.v) {
+      updatedNodeId = step.pair.v;
+    }
+  }
+
+  let html = "";
+  const sortedNodeIds = Object.keys(distances).sort((a, b) => {
+    if (a === updatedNodeId) return -1;
+    if (b === updatedNodeId) return 1;
+    return a.localeCompare(b);
+  });
+
+  sortedNodeIds.forEach((nid) => {
+    const d = distances[nid];
+    const isUpdated = nid === updatedNodeId;
+    const distText = d !== null && d !== undefined ? `${Number(d).toFixed(1)} ms` : "∞";
+    const statusText = nid === traceData.source
+      ? `<span style="color: #10b981;">(Source)</span>`
+      : isUpdated
+      ? `<span style="color: #34d399; font-weight: 700;">⚡ Updated</span>`
+      : (d !== null ? `<span style="color: #94a3b8;">Reachable</span>` : `<span style="color: #64748b;">Unreached</span>`);
+
+    html += `
+      <tr class="${isUpdated ? 'table-row-updated' : ''}">
+        <td><strong>${nid}</strong></td>
+        <td>${distText}</td>
+        <td>${statusText}</td>
+      </tr>
+    `;
+  });
+
+  traceTableBody.innerHTML = html;
+}
+
+function highlightTraceCanvas(step) {
+  clearTraceStepHighlight();
+
+  const u = step.edge ? step.edge.u : (step.pair ? step.pair.u : null);
+  const v = step.edge ? step.edge.v : (step.pair ? step.pair.v : null);
+
+  if (u && v && edgesDataSet && nodesDataSet) {
+    const edge = edgesDataSet.get({
+      filter: (e) => (e.from === u && e.to === v) || (e.from === v && e.to === u),
+    })[0];
+
+    if (edge) {
+      lastHighlightedTraceEdgeId = edge.id;
+      const highlightColor = step.improved ? "#10b981" : "#f59e0b";
+      edgesDataSet.update({
+        id: edge.id,
+        label: `${edge.latency}ms`,
+        color: { color: highlightColor, highlight: highlightColor },
+        width: 5.0,
+      });
+    }
+
+    nodesDataSet.update({ id: u, shadow: { enabled: true, color: "#f59e0b", size: 14 } });
+    nodesDataSet.update({ id: v, shadow: { enabled: true, color: step.improved ? "#10b981" : "#f59e0b", size: 14 } });
+    lastHighlightedTraceNodeIds = [u, v];
+  }
+}
+
+function togglePlayTrace() {
+  if (tracePlaybackTimer) {
+    stopTracePlayback();
+    return;
+  }
+
+  if (!traceData || !traceData.steps || traceData.steps.length === 0) return;
+
+  // If at end, loop back to start
+  if (currentTraceIndex >= traceData.steps.length - 1) {
+    currentTraceIndex = 0;
+    renderTraceStep(0);
+  }
+
+  const speed = parseInt(traceSpeedSelect ? traceSpeedSelect.value : "500", 10) || 500;
+  traceBtnPlay.textContent = "⏸ Pause";
+  traceBtnPlay.classList.add("btn-ctrl-playing");
+
+  tracePlaybackTimer = setInterval(() => {
+    if (!traceData || !traceData.steps) {
+      stopTracePlayback();
+      return;
+    }
+    if (currentTraceIndex < traceData.steps.length - 1) {
+      currentTraceIndex++;
+      renderTraceStep(currentTraceIndex);
+    } else {
+      stopTracePlayback();
+    }
+  }, speed);
+}
+
+// Event Listeners for Visualizer
+if (btnExplainRun) {
+  btnExplainRun.addEventListener("click", () => {
+    loadAndOpenTrace();
+  });
+}
+
+if (btnCloseExplain) {
+  btnCloseExplain.addEventListener("click", () => {
+    closeTraceVisualizer();
+  });
+}
+
+traceAlgoRadios.forEach((r) => {
+  r.addEventListener("change", () => {
+    if (explainPanel && explainPanel.style.display !== "none") {
+      loadAndOpenTrace();
+    }
+  });
+});
+
+if (traceBtnFirst) {
+  traceBtnFirst.addEventListener("click", () => {
+    stopTracePlayback();
+    renderTraceStep(0);
+  });
+}
+
+if (traceBtnPrev) {
+  traceBtnPrev.addEventListener("click", () => {
+    stopTracePlayback();
+    renderTraceStep(currentTraceIndex - 1);
+  });
+}
+
+if (traceBtnNext) {
+  traceBtnNext.addEventListener("click", () => {
+    stopTracePlayback();
+    renderTraceStep(currentTraceIndex + 1);
+  });
+}
+
+if (traceBtnLast) {
+  traceBtnLast.addEventListener("click", () => {
+    stopTracePlayback();
+    if (traceData && traceData.steps) {
+      renderTraceStep(traceData.steps.length - 1);
+    }
+  });
+}
+
+if (traceBtnPlay) {
+  traceBtnPlay.addEventListener("click", () => {
+    togglePlayTrace();
+  });
+}
+
+if (traceScrubber) {
+  traceScrubber.addEventListener("input", (e) => {
+    stopTracePlayback();
+    renderTraceStep(parseInt(e.target.value, 10));
+  });
+}
+
+if (traceSpeedSelect) {
+  traceSpeedSelect.addEventListener("change", () => {
+    if (tracePlaybackTimer) {
+      stopTracePlayback();
+      togglePlayTrace();
+    }
+  });
+}
+
 // Initialize on DOM load
 document.addEventListener("DOMContentLoaded", () => {
   loadNetwork();
 });
+

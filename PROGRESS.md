@@ -263,3 +263,37 @@ This document tracks the progress of each milestone in the Mini CDN Routing Simu
   - Start app `python dashboard/app.py`, select "Dijkstra" in Algorithm panel, run route query, or choose "Compare Both" to see the three-way agreement card and badge.
 - **Known issues:** None.
 
+---
+
+## Milestone X2: Step-Through Visualizer & Algorithm Trace Mode
+- **Status:** Complete (Tag: `x2`)
+- **What was done:**
+  - `routing/bellman_ford.py`: Added `trace` attribute to `BellmanFordResult` and `trace_mode: bool = False` argument to `bellman_ford()`. Records comprehensive relaxation step details: pass iteration, edge examined $(u \to v, w)$, before/after distances, boolean improvement flag, live distance snapshot, and narrative explanation.
+  - `routing/floyd_warshall.py`: Added `trace` attribute to `FloydWarshallResult`, `trace_mode: bool = False`, and `source_focus: Optional[str] = None` argument to `floyd_warshall()`. Records step details: $k$ index, intermediate node $k$, pair examined $(u \to v)$, before/after distances, boolean improvement flag, distance snapshot, and narrative explanation.
+  - `services/network_service.py`: Added `explain_route_trace()` executing Bellman-Ford or Floyd-Warshall with trace mode enabled. Strictly limits execution to topologies with $\le 30$ nodes, raising a clear `ValueError` if the node limit is exceeded.
+  - `dashboard/app.py`: Added `POST` & `GET` endpoint `/api/routing/trace` returning structured trace data, source, node count, edge count, total steps, step array, and final distances.
+  - `dashboard/templates/index.html`:
+    - Added "🔍 Explain This Run (Step-Through)" button in the routing telemetry section.
+    - Added "Explain This Run" panel with algorithm toggle (Bellman-Ford / Floyd-Warshall), player controls (`⏮ First`, `◀ Prev`, `▶ Play / ⏸ Pause`, `Next ▶`, `⏭ Last`, playback speed dropdown), scrubber range slider, step counter (`Step X of Y`), narrative explanation card with improvement badge, and live distance table.
+    - Added prominent topology limit warning alert for topologies $> 30$ nodes.
+  - `dashboard/static/js/app.js`:
+    - Added trace playback engine with timer management, speed adjustment (0.5x, 1x, 2x, 5x), scrubber navigation, and step rendering.
+    - Implemented real-time Vis.js canvas highlighting: dynamically colors the examined edge (green for improvements, gold for checks), shows edge latency, adds glowing halos to endpoints, and restores optimal route highlighting upon exit.
+    - Implemented live distance table updating on each step with highlighted updated rows.
+  - `dashboard/static/css/style.css`: Added responsive styles for `.explain-panel`, controls, badges, explanation cards, and scrollable distance tables.
+  - `tests/test_visualizer_trace.py`: Added 5 comprehensive tests:
+    - `test_bellman_ford_trace_final_state_equals_normal`: Verifies mathematical equality (`distances`, `predecessors`, `operations`, `has_negative_cycle`) between traced and untraced runs, and verifies final trace step equals normal result.
+    - `test_floyd_warshall_trace_final_state_equals_normal`: Verifies matrix equality and step structure.
+    - `test_trace_mode_on_multiple_random_topologies`: Verifies state equality across diverse random graph configurations.
+    - `test_explain_route_trace_service_limits`: Verifies $\le 30$ node enforcement and error handling.
+    - `test_trace_api_endpoint`: Validates REST API responses, parameter validation, and GET/POST handlers.
+  - Test suite: **84 passing tests with 100% success rate** (original 20 untouched + 64 new).
+- **How to verify:**
+  - Run `pytest -v tests/test_visualizer_trace.py tests/`
+  - Start app `python dashboard/app.py`, open `http://localhost:5000`.
+  - Select a user region (e.g., `user_1` or click a teal node), click "Explain This Run", and test `Play`, `Prev`, `Next`, speed dropdown, and scrubber while observing Vis.js edge highlights and distance table updates.
+- **Known issues:** None.
+
+---
+
+
