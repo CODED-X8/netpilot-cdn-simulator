@@ -657,6 +657,212 @@ btnReset.addEventListener("click", async () => {
   }
 });
 
+// ==========================================
+// Chaos Mode (Milestone X3)
+// ==========================================
+const btnChaosToggle = document.getElementById("btn-chaos-toggle");
+const chaosStatusBadge = document.getElementById("chaos-status-badge");
+const chaosIntervalInput = document.getElementById("chaos-interval-input");
+const chaosMaxFailuresInput = document.getElementById("chaos-max-failures-input");
+const chaosProgressText = document.getElementById("chaos-progress-text");
+const chaosActiveControls = document.getElementById("chaos-active-controls");
+const btnChaosStop = document.getElementById("btn-chaos-stop");
+const btnChaosViewPostmortem = document.getElementById("btn-chaos-view-postmortem");
+
+let chaosTimer = null;
+let isChaosRunning = false;
+let lastChaosPostmortemMarkdown = null;
+let lastChaosEventId = null;
+
+function resetChaosUI() {
+  if (chaosTimer) {
+    clearInterval(chaosTimer);
+    chaosTimer = null;
+  }
+  isChaosRunning = false;
+  if (chaosStatusBadge) {
+    chaosStatusBadge.textContent = "OFF";
+    chaosStatusBadge.style.background = "rgba(148, 163, 184, 0.2)";
+    chaosStatusBadge.style.color = "#94a3b8";
+  }
+  if (btnChaosToggle) {
+    btnChaosToggle.textContent = "▶ Start Chaos";
+    btnChaosToggle.style.background = "linear-gradient(135deg, #ef4444, #dc2626)";
+  }
+  if (chaosIntervalInput) chaosIntervalInput.disabled = false;
+  if (chaosMaxFailuresInput) chaosMaxFailuresInput.disabled = false;
+  if (chaosActiveControls) chaosActiveControls.style.display = "none";
+}
+
+async function startChaosMode() {
+  let N = parseInt(chaosIntervalInput ? chaosIntervalInput.value : "5", 10) || 5;
+  if (N < 5) {
+    alert("Chaos interval must be at least 5 seconds.");
+    if (chaosIntervalInput) chaosIntervalInput.value = 5;
+    N = 5;
+  }
+  const M = parseInt(chaosMaxFailuresInput ? chaosMaxFailuresInput.value : "5", 10) || 5;
+  const userId = selectedUserId || (userSelect ? userSelect.value : null);
+  const algo = getSelectedAlgorithm();
+
+  try {
+    const res = await fetch("/api/chaos/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        interval_seconds: N,
+        max_failures: M,
+        user_id: userId,
+        algorithm: algo,
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      logFault(`Failed to start Chaos Mode: ${data.error}`, "kill");
+      return;
+    }
+
+    isChaosRunning = true;
+    if (chaosStatusBadge) {
+      chaosStatusBadge.textContent = "ACTIVE";
+      chaosStatusBadge.style.background = "rgba(239, 68, 68, 0.25)";
+      chaosStatusBadge.style.color = "#f87171";
+    }
+    if (btnChaosToggle) {
+      btnChaosToggle.textContent = "⏸ Pause Chaos";
+      btnChaosToggle.style.background = "linear-gradient(135deg, #f59e0b, #d97706)";
+    }
+    if (chaosIntervalInput) chaosIntervalInput.disabled = true;
+    if (chaosMaxFailuresInput) chaosMaxFailuresInput.disabled = true;
+    if (chaosProgressText) chaosProgressText.textContent = `0 / ${M} failures`;
+    if (chaosActiveControls) chaosActiveControls.style.display = "flex";
+
+    logFault(`🔥 Chaos Mode activated: Failure every ${N}s | Auto-reset after ${M} failures`, "kill");
+
+    // Start recurring ticks
+    chaosTimer = setInterval(triggerChaosTick, N * 1000);
+  } catch (err) {
+    console.error("Start chaos error:", err);
+    logFault(`Chaos start error: ${err.message}`, "kill");
+  }
+}
+
+async function triggerChaosTick() {
+  if (!isChaosRunning) return;
+
+  try {
+    const res = await fetch("/api/chaos/tick", { method: "POST" });
+    const data = await res.json();
+
+    if (!res.ok) {
+      logFault(`Chaos tick error: ${data.error}`, "kill");
+      stopChaosMode(false);
+      return;
+    }
+
+    // Update progress
+    if (chaosProgressText) {
+      chaosProgressText.textContent = `${data.tick_number} / ${data.max_failures} failures`;
+    }
+
+    // Log to fault feed
+    const ke = data.killed_edge;
+    const deltaStr = data.latency_delta_ms !== null ? (data.latency_delta_ms >= 0 ? `+${data.latency_delta_ms} ms` : `${data.latency_delta_ms} ms`) : "N/A";
+    const reachStr = data.after.reachable ? `Route latency: ${data.after.latency ? data.after.latency.toFixed(1) : "?"} ms (${data.after.best_edge})` : "DESTINATION ISOLATED";
+    logFault(`🔥 Chaos [${data.tick_number}/${data.max_failures}]: Link severed ${ke.u} ↔ ${ke.v} (${ke.latency}ms) | &Delta; Latency: ${deltaStr} | ${reachStr}`, "kill");
+
+    // Update fault diff card
+    if (faultDiffCard && data.before && data.after) {
+      faultDiffCard.style.display = "block";
+      faultDiffSummary.textContent = `Chaos Severed Link ${ke.u} ↔ ${ke.v} (${ke.latency}ms)`;
+      diffBeforePath.textContent = data.before.path && data.before.path.length > 0 ? data.before.path.join(" ➔ ") : "--";
+      diffBeforeLat.textContent = data.before.latency !== null ? `${data.before.latency.toFixed(1)} ms` : "∞";
+      diffAfterPath.textContent = data.after.path && data.after.path.length > 0 ? data.after.path.join(" ➔ ") : "NO ROUTE (Unreachable)";
+      diffAfterLat.textContent = data.after.latency !== null ? `${data.after.latency.toFixed(1)} ms` : "∞";
+      diffDelta.textContent = deltaStr !== "N/A" ? `${deltaStr} adaptation latency (${data.after.hops} hops)` : "Route disconnected";
+    }
+
+    // Save postmortem
+    if (data.postmortem && data.postmortem.markdown) {
+      lastChaosPostmortemMarkdown = data.postmortem.markdown;
+      lastChaosEventId = data.event_id;
+      if (btnChaosViewPostmortem) btnChaosViewPostmortem.style.display = "block";
+    }
+
+    // Update network canvas directly
+    await loadNetwork(true);
+
+    // Highlight active route after failure
+    if (data.after && data.after.path && data.after.path.length > 1) {
+      highlightRoute(data.after.path);
+    }
+
+    // Check auto-reset trigger
+    if (data.auto_reset_triggered || !data.is_active) {
+      resetChaosUI();
+      logFault(`🛑 Chaos Mode auto-reset triggered after ${data.max_failures} failures. Topology restored to baseline.`, "info");
+      await loadNetwork(true);
+    }
+  } catch (err) {
+    console.error("Chaos tick error:", err);
+    logFault(`Chaos tick network error: ${err.message}`, "kill");
+    stopChaosMode(false);
+  }
+}
+
+async function stopChaosMode(restoreTopology = true) {
+  resetChaosUI();
+  try {
+    const res = await fetch("/api/chaos/stop", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ restore_topology: restoreTopology }),
+    });
+    const data = await res.json();
+    if (restoreTopology) {
+      logFault("🛑 Chaos Mode stopped. Active topology restored to baseline.", "info");
+      if (faultDiffCard) faultDiffCard.style.display = "none";
+      await loadNetwork(true);
+    }
+  } catch (err) {
+    console.error("Stop chaos error:", err);
+  }
+}
+
+if (btnChaosToggle) {
+  btnChaosToggle.addEventListener("click", () => {
+    if (isChaosRunning) {
+      stopChaosMode(false);
+    } else {
+      startChaosMode();
+    }
+  });
+}
+
+if (btnChaosStop) {
+  btnChaosStop.addEventListener("click", () => {
+    stopChaosMode(true);
+  });
+}
+
+if (btnChaosViewPostmortem) {
+  btnChaosViewPostmortem.addEventListener("click", () => {
+    if (!lastChaosPostmortemMarkdown) return;
+    currentPostmortemMarkdown = lastChaosPostmortemMarkdown;
+    currentPostmortemId = lastChaosEventId || "chaos_incident";
+    if (postmortemModalTitle) {
+      postmortemModalTitle.textContent = `Incident Postmortem (${currentPostmortemId})`;
+    }
+    if (postmortemContent) {
+      postmortemContent.textContent = lastChaosPostmortemMarkdown;
+    }
+    if (postmortemModal) {
+      postmortemModal.style.display = "flex";
+    }
+  });
+}
+
 // Fit View
 btnFit.addEventListener("click", () => {
   if (network) {

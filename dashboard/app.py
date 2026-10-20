@@ -21,6 +21,7 @@ load_dotenv()
 from graph.network import Graph
 import services.network_service as net_service
 import services.topology_service as topo_service
+import services.chaos_service as chaos_service
 from services.topology_service import TopologyValidationError
 from storage.event_store import get_event_store
 from copilot.agent import run_copilot_chat
@@ -243,6 +244,74 @@ def get_routing_trace_api():
         return jsonify({"error": str(ve)}), 400
     except Exception as e:
         return jsonify({"error": f"Failed to generate trace: {str(e)}"}), 500
+
+
+@app.route("/api/chaos/start", methods=["POST"])
+def start_chaos_api():
+    """Start automated Chaos Mode on the active session topology."""
+    session_id = _get_session_id()
+    data = request.get_json(silent=True) or {}
+
+    interval_seconds = int(data.get("interval_seconds", 5))
+    max_failures = int(data.get("max_failures", 5))
+    source = data.get("source") or data.get("user_id")
+    algo = data.get("algorithm", "bellman_ford")
+
+    try:
+        result = chaos_service.start_chaos(
+            session_id=session_id,
+            interval_seconds=interval_seconds,
+            max_failures=max_failures,
+            source=source,
+            algo=algo,
+        )
+        return jsonify(result)
+    except ValueError as ve:
+        return jsonify({"error": str(ve)}), 400
+    except Exception as e:
+        return jsonify({"error": f"Failed to start chaos mode: {str(e)}"}), 500
+
+
+@app.route("/api/chaos/tick", methods=["POST"])
+def chaos_tick_api():
+    """Trigger a single tick of Chaos Mode (sever link, reroute, log, postmortem)."""
+    session_id = _get_session_id()
+    try:
+        result = chaos_service.chaos_tick(session_id=session_id)
+        g = net_service.get_active_graph(session_id)
+        result["network"] = format_graph_for_vis(g)
+        return jsonify(result)
+    except ValueError as ve:
+        return jsonify({"error": str(ve)}), 400
+    except Exception as e:
+        return jsonify({"error": f"Chaos tick failed: {str(e)}"}), 500
+
+
+@app.route("/api/chaos/stop", methods=["POST"])
+def stop_chaos_api():
+    """Stop Chaos Mode and restore the active topology to baseline."""
+    session_id = _get_session_id()
+    data = request.get_json(silent=True) or {}
+    restore_topology = data.get("restore_topology", True)
+
+    try:
+        result = chaos_service.stop_chaos(session_id=session_id, restore_topology=restore_topology)
+        g = net_service.get_active_graph(session_id)
+        result["network"] = format_graph_for_vis(g)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": f"Failed to stop chaos mode: {str(e)}"}), 500
+
+
+@app.route("/api/chaos/status", methods=["GET"])
+def get_chaos_status_api():
+    """Query current Chaos Mode status for the active session."""
+    session_id = _get_session_id()
+    try:
+        result = chaos_service.get_chaos_status(session_id=session_id)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/max-flow", methods=["POST"])

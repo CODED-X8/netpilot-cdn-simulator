@@ -296,4 +296,33 @@ This document tracks the progress of each milestone in the Mini CDN Routing Simu
 
 ---
 
+## Milestone X3: Chaos Mode Engine, Auto-Reset & Automated Postmortems
+- **Status:** Complete (Tag: `x3`)
+- **What was done:**
+  - `services/chaos_service.py`:
+    - Session-isolated recurring link failure simulation engine with configurable interval $N \ge 5$s and auto-reset threshold $M \ge 1$.
+    - In each chaos tick: severs a random active edge bidirectionally, recomputes the active shortest-path route, measures latency adaptation delta and reachability, logs structured `failure_simulation` event to `EventStore`, and triggers automated incident postmortem generation via `postmortem_service.generate_postmortem()`.
+    - Automatically resets the active topology to baseline and deactivates the loop when $M$ failures are reached, logging `chaos_auto_reset` event.
+    - Provides manual `stop_chaos()` with automatic or optional topology restoration.
+  - `dashboard/app.py`:
+    - Added REST endpoints: `POST /api/chaos/start`, `POST /api/chaos/tick`, `POST /api/chaos/stop`, and `GET /api/chaos/status`.
+  - `dashboard/templates/index.html`:
+    - Added Chaos Mode controller in Section 3 (Fault Simulation) with status indicator (`OFF` / `ACTIVE`), Start/Pause button, $N$ interval input (min 5s), $M$ auto-reset threshold input, live progress counter (`0 / M failures`), Stop & Reset button, and View Postmortem button.
+  - `dashboard/static/js/app.js`:
+    - Integrated client-side ticker invoking `/api/chaos/tick` every $N$ seconds.
+    - Appends real-time events to `#fault-feed` with severed link, latency delta, and active route.
+    - Updates Vis.js canvas and route highlight on each failure tick.
+    - Connects View Postmortem button to `#postmortem-modal` for instant incident inspection.
+    - Automatically handles auto-reset when $M$ failures are completed, restoring UI and baseline canvas.
+  - `tests/test_chaos.py`: Added 6 unit and integration tests covering parameter validation ($N \ge 5$, $M \ge 1$), tick execution, EventStore logging, postmortem generation, auto-reset after $M$ failures, manual stop restoration, session isolation, and REST API endpoints.
+  - Test suite: **90 passing tests with 100% success rate** (original 20 untouched + 70 new).
+- **How to verify:**
+  - Run `pytest -v tests/test_chaos.py tests/`
+  - Start app `python dashboard/app.py`, open `http://localhost:5000`.
+  - Under Section 3 (Fault Simulation), configure $N = 5$s and $M = 3$ failures, click "Start Chaos", observe recurring link severance in the live event feed and canvas, check route rerouting, click "View Postmortem", and verify automatic reset after 3 failures.
+- **Known issues:** None.
+
+---
+
+
 
