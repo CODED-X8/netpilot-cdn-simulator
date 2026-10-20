@@ -154,6 +154,8 @@ def test_copilot_agent_loop_what_if():
     assert "what_if" in resp["answer"]
     assert resp["tokens"] > 0
     assert resp["latency_ms"] >= 0
+    assert resp["model_used"] == "fake-llm"
+    assert resp["provider_used"] == "fake"
 
 
 def test_copilot_agent_loop_destructive_confirmation():
@@ -222,39 +224,34 @@ def test_groq_provider_detection(monkeypatch):
     assert provider2.model == "llama-3.1-8b-instant"
 
 
-def test_ollama_provider_detection_and_failover(monkeypatch):
-    """Test Ollama provider detection and fallback behavior."""
+def test_openai_provider_detection(monkeypatch):
+    """Test standard OpenAI provider detection and error handling."""
+    import pytest
     from copilot.llm_provider import (
         get_llm_provider,
         get_active_provider_name,
-        get_ollama_provider,
         OpenAICompatibleProvider,
-        FakeLLMProvider,
     )
 
-    # 1. Ollama provider attributes
-    ollama_prov = get_ollama_provider()
-    assert ollama_prov.base_url == "http://localhost:11434/v1"
-    assert "qwen" in ollama_prov.model.lower()
+    # 1. Standard OpenAI provider configuration
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.setenv("LLM_API_KEY", "sk-proj-test123456")
+    monkeypatch.delenv("LLM_MODEL", raising=False)
+    assert get_active_provider_name() == "openai"
 
-    # 2. Test fallback execution when primary fails
-    mock_fallback = FakeLLMProvider(scripted_steps=["Fallback response from backup"])
+    prov = get_llm_provider()
+    assert prov is not None
+    assert prov.model == "gpt-4o-mini"
+    assert "api.openai.com" in prov.base_url
+
+    # 2. Test error handling when primary API call fails
     failing_primary = OpenAICompatibleProvider(
         api_key="broken_key",
         base_url="https://broken-primary.invalid/v1",
         model="primary-test",
-        fallback_provider=mock_fallback,
         timeout=1,
     )
-    resp = failing_primary.chat_complete([{"role": "user", "content": "hi"}])
-    assert resp.content == "Fallback response from backup"
-
-    # 3. Explicit Ollama provider mode
-    monkeypatch.setenv("LLM_PROVIDER", "ollama")
-    monkeypatch.setenv("OLLAMA_MODEL", "qwen3:8b-q4_K_M")
-    assert get_active_provider_name() == "ollama"
-    prov = get_llm_provider()
-    assert prov is not None
-    assert prov.model == "qwen3:8b-q4_K_M"
-    assert "11434" in prov.base_url
+    with pytest.raises(RuntimeError) as exc_info:
+        failing_primary.chat_complete([{"role": "user", "content": "hi"}])
+    assert "LLM API" in str(exc_info.value)
 

@@ -8,9 +8,8 @@ import math
 from typing import List, Dict, Any, Optional
 
 from .embedder import get_embedder, BaseEmbedder
-from storage.event_store import get_event_store
+from storage.event_store import get_event_store, get_default_db_path
 
-DEFAULT_DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "network_events.db"))
 RUNBOOKS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "runbooks"))
 
 
@@ -32,8 +31,8 @@ def cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
 class VectorStore:
     """Vector database backed by SQLite storing document embeddings."""
 
-    def __init__(self, db_path: str = DEFAULT_DB_PATH, embedder: Optional[BaseEmbedder] = None):
-        self.db_path = db_path
+    def __init__(self, db_path: Optional[str] = None, embedder: Optional[BaseEmbedder] = None):
+        self.db_path = db_path if db_path is not None else get_default_db_path()
         self.embedder = embedder or get_embedder()
         self._init_db()
 
@@ -245,11 +244,12 @@ class VectorStore:
 _VECTOR_STORE: Optional[VectorStore] = None
 
 
-def get_vector_store(db_path: str = DEFAULT_DB_PATH, force_reinit: bool = False) -> VectorStore:
+def get_vector_store(db_path: Optional[str] = None, force_reinit: bool = False) -> VectorStore:
     """Retrieve singleton vector store instance and ensure runbooks are loaded."""
     global _VECTOR_STORE
-    if _VECTOR_STORE is None or force_reinit:
-        _VECTOR_STORE = VectorStore(db_path=db_path)
+    resolved_path = db_path if db_path is not None else get_default_db_path()
+    if _VECTOR_STORE is None or force_reinit or _VECTOR_STORE.db_path != resolved_path:
+        _VECTOR_STORE = VectorStore(db_path=resolved_path)
         # Ensure runbooks are indexed
         _VECTOR_STORE.index_runbooks()
     return _VECTOR_STORE

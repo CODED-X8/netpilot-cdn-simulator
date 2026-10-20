@@ -107,12 +107,18 @@ def run_copilot_chat(
     final_answer = ""
     requires_confirmation = False
     confirmation_payload: Optional[Dict[str, Any]] = None
+    model_used: Optional[str] = None
+    provider_used: Optional[str] = None
 
     while step < MAX_TOOL_STEPS:
         step += 1
 
         response: LLMResponse = provider.chat_complete(messages=messages, tools=COPILOT_TOOLS_OPENAI_SPEC)
         total_tokens += response.total_tokens
+        if response.model_name:
+            model_used = response.model_name
+        if response.provider_name:
+            provider_used = response.provider_name
 
         # Check if model requested tool calls
         if response.tool_calls:
@@ -200,4 +206,6 @@ def run_copilot_chat(
         "invalid_event_ids": invalid_events,
         "requires_confirmation": requires_confirmation,
         "confirmation_action": confirmation_payload,
+        "model_used": model_used,
+        "provider_used": provider_used,
     }

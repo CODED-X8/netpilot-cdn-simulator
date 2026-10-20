@@ -52,11 +52,38 @@ class NetworkEvent:
         }
 
 
+def get_default_db_path() -> str:
+    """Determine database path, adapting to serverless environments (e.g. Vercel)."""
+    env_path = os.environ.get("EVENT_STORE_DB_PATH")
+    if env_path:
+        return env_path
+
+    # Check if running in a serverless environment (e.g. Vercel) or root dir is read-only
+    is_vercel = bool(os.environ.get("VERCEL"))
+    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    default_root_db = os.path.join(root_dir, "network_events.db")
+
+    if is_vercel or not os.access(root_dir, os.W_OK):
+        tmp_db = "/tmp/network_events.db"
+        if os.path.exists(default_root_db) and not os.path.exists(tmp_db):
+            try:
+                import shutil
+                shutil.copyfile(default_root_db, tmp_db)
+            except Exception:
+                pass
+        return tmp_db
+
+    return default_root_db
+
+
 class EventStore:
     """SQLite-backed structured event store."""
 
-    def __init__(self, db_path: str = "network_events.db"):
-        self.db_path = db_path
+    def __init__(self, db_path: Optional[str] = None):
+        if db_path is None or db_path == "network_events.db":
+            self.db_path = get_default_db_path()
+        else:
+            self.db_path = db_path
         self._init_db()
 
     def _get_connection(self) -> sqlite3.Connection:
@@ -192,9 +219,14 @@ class EventStore:
 _GLOBAL_EVENT_STORE: Optional[EventStore] = None
 
 
-def get_event_store(db_path: str = "network_events.db") -> EventStore:
+def get_event_store(db_path: Optional[str] = None) -> EventStore:
     """Retrieve or initialize the global event store instance."""
     global _GLOBAL_EVENT_STORE
-    if _GLOBAL_EVENT_STORE is None or _GLOBAL_EVENT_STORE.db_path != db_path:
-        _GLOBAL_EVENT_STORE = EventStore(db_path=db_path)
+    if db_path is None or db_path == "network_events.db":
+        resolved_path = get_default_db_path()
+    else:
+        resolved_path = db_path
+
+    if _GLOBAL_EVENT_STORE is None or _GLOBAL_EVENT_STORE.db_path != resolved_path:
+        _GLOBAL_EVENT_STORE = EventStore(db_path=resolved_path)
     return _GLOBAL_EVENT_STORE

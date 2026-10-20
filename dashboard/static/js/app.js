@@ -948,12 +948,19 @@ async function sendChatMessage(confirmedAction = null) {
       ? '<span style="color: #34d399;">✅ Grounded</span>'
       : '<span style="color: #fbbf24;">⚠️ Ungrounded</span>';
 
+    let modelBadge = "";
+    if (data.model_used) {
+      const pName = data.provider_used ? data.provider_used.toUpperCase() : "AI";
+      modelBadge = `<span style="background: rgba(139, 92, 246, 0.15); color: #c4b5fd; border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 4px; padding: 1px 6px; font-weight: 500; font-size: 0.7rem;">⚡ ${escapeHtml(pName)} (${escapeHtml(data.model_used)})</span>`;
+    }
+
     assistantMsgEl.innerHTML = `
       <div class="msg-bubble">
         ${formatMarkdown(data.answer)}
         ${confirmationHtml}
         ${toolsHtml}
         <div class="msg-footer">
+          ${modelBadge}
           <span>${data.latency_ms} ms</span>
           <span>${data.tokens} tokens</span>
           <span>${groundBadge}</span>
