@@ -1,8 +1,5 @@
-[build]
-  command = "pip install -r requirements.txt"
-  functions = "netlify/functions"
-
 [[redirects]]
   from = "/*"
-  to = "/.netlify/functions/api"
+  to = "https://netpilot-cdn-simulator-rho.vercel.app/:splat"
   status = 200
+  force = true

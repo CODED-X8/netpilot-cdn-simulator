@@ -151,20 +151,24 @@ def test_vercel_wsgi_entrypoint_and_middleware():
     assert "path" in r_query_post.get_json()
 
 
-def test_netlify_handler():
-    """Verify netlify/functions/api.py adapts AWS Lambda/Netlify events properly."""
-    from netlify.functions.api import handler
+def test_netlify_proxy_config():
+    """Verify netlify.toml and _redirects contain transparent proxy rule to live app."""
+    import os
 
-    event = {
-        "path": "/",
-        "httpMethod": "GET",
-        "headers": {},
-        "queryStringParameters": None,
-        "body": None,
-        "isBase64Encoded": False,
-    }
-    resp = handler(event, {})
-    assert resp["statusCode"] == 200
-    assert "NetPilot" in resp["body"]
+    proj_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    toml_path = os.path.join(proj_dir, "netlify.toml")
+    redirects_path = os.path.join(proj_dir, "_redirects")
+
+    assert os.path.exists(toml_path), "netlify.toml missing"
+    assert os.path.exists(redirects_path), "_redirects missing"
+
+    with open(toml_path, "r", encoding="utf-8") as f:
+        toml_content = f.read()
+    assert "https://netpilot-cdn-simulator-rho.vercel.app/:splat" in toml_content
+    assert "status = 200" in toml_content
+
+    with open(redirects_path, "r", encoding="utf-8") as f:
+        redirects_content = f.read()
+    assert "https://netpilot-cdn-simulator-rho.vercel.app/:splat  200!" in redirects_content
 
 
