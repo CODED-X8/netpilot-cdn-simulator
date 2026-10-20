@@ -144,19 +144,39 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                     data = json.loads(resp.read().decode("utf-8"))
                 break
             except Exception as e:
-                if isinstance(e, urllib.error.HTTPError) and e.code == 429 and attempt < max_retries:
-                    wait_sec = backoff_sec
-                    try:
-                        err_body = e.read().decode("utf-8", errors="replace")
-                        m = re.search(r"try again in (\d+(?:\.\d+)?)s", err_body)
-                        if m:
-                            wait_sec = max(float(m.group(1)) + 1.0, wait_sec)
-                    except Exception:
-                        pass
-                    time.sleep(wait_sec)
-                    backoff_sec *= 1.5
-                    continue
                 if isinstance(e, urllib.error.HTTPError):
+                    # Check for 404 model not found (e.g. decommissioned or unavailable model)
+                    if e.code == 404:
+                        try:
+                            err_body = e.read().decode("utf-8", errors="replace")
+                        except Exception:
+                            err_body = ""
+                        if ("model_not_found" in err_body or "does not exist" in err_body) and "groq" in self.base_url.lower():
+                            if self.model != "openai/gpt-oss-120b":
+                                self.model = "openai/gpt-oss-120b"
+                                payload["model"] = "openai/gpt-oss-120b"
+                                req = urllib.request.Request(
+                                    url,
+                                    data=json.dumps(payload).encode("utf-8"),
+                                    headers=headers,
+                                    method="POST",
+                                )
+                                continue
+                        raise RuntimeError(f"LLM API HTTP {e.code}: {err_body}")
+
+                    if e.code == 429 and attempt < max_retries:
+                        wait_sec = backoff_sec
+                        try:
+                            err_body = e.read().decode("utf-8", errors="replace")
+                            m = re.search(r"try again in (\d+(?:\.\d+)?)s", err_body)
+                            if m:
+                                wait_sec = max(float(m.group(1)) + 1.0, wait_sec)
+                        except Exception:
+                            pass
+                        time.sleep(wait_sec)
+                        backoff_sec *= 1.5
+                        continue
+
                     err_body = e.read().decode("utf-8", errors="replace")
                     raise RuntimeError(f"LLM API HTTP {e.code}: {err_body}")
                 raise RuntimeError(f"LLM API request failed: {str(e)}")
@@ -443,6 +463,11 @@ def get_llm_provider(force_fake: bool = False, fake_steps: Optional[List[Any]] =
         )
         groq_model = os.environ.get("GROQ_MODEL", "").strip()
         llm_model = os.environ.get("LLM_MODEL", "").strip()
+
+        # Automatically remap decommissioned/inaccessible Groq models to active model
+        if groq_model in ("llama-3.3-70b-versatile", "llama-3.1-70b-versatile"):
+            groq_model = "openai/gpt-oss-120b"
+
         if groq_model:
             model = groq_model
         elif llm_model and not llm_model.startswith("gpt-"):

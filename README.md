@@ -130,8 +130,8 @@ cp .env.example .env
 
 | Variable | Default | Purpose |
 | :--- | :--- | :--- |
-| `GROQ_API_KEY` | *(unset)* | **Groq API Key** (starts with `gsk_`). Auto-configures `https://api.groq.com/openai/v1` and `llama-3.3-70b-versatile`. |
-| `GROQ_MODEL` | `llama-3.3-70b-versatile` | Groq model (`llama-3.3-70b-versatile`, `llama-3.1-8b-instant`, etc.). |
+| `GROQ_API_KEY` | *(unset)* | **Groq API Key** (starts with `gsk_`). Auto-configures `https://api.groq.com/openai/v1` and `openai/gpt-oss-120b`. |
+| `GROQ_MODEL` | `openai/gpt-oss-120b` | Groq model (`openai/gpt-oss-120b`, `openai/gpt-oss-20b`, etc.). |
 | `LLM_API_KEY` | *(unset)* | Generic OpenAI / OpenRouter API Key. If unset, NetPilot safely uses offline `FakeLLMProvider`. |
 | `LLM_BASE_URL` | `https://api.openai.com/v1` | OpenAI-compatible endpoint. |
 | `LLM_MODEL` | `gpt-4o-mini` | Model name when using OpenAI. |

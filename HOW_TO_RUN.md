@@ -58,7 +58,7 @@ The project includes an automatic integration with **Groq** ([https://console.gr
 # Set your Groq API key (starts with gsk_...)
 export GROQ_API_KEY="gsk_your_groq_api_key_here"
 
-# Start the server (Groq endpoint and llama-3.3-70b-versatile are auto-detected!)
+# Start the server (Groq endpoint and openai/gpt-oss-120b are auto-detected!)
 python dashboard/app.py
 ```
 
