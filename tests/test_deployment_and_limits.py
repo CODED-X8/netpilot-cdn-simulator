@@ -150,3 +150,21 @@ def test_vercel_wsgi_entrypoint_and_middleware():
     assert r_query_post.status_code == 200
     assert "path" in r_query_post.get_json()
 
+
+def test_netlify_handler():
+    """Verify netlify/functions/api.py adapts AWS Lambda/Netlify events properly."""
+    from netlify.functions.api import handler
+
+    event = {
+        "path": "/",
+        "httpMethod": "GET",
+        "headers": {},
+        "queryStringParameters": None,
+        "body": None,
+        "isBase64Encoded": False,
+    }
+    resp = handler(event, {})
+    assert resp["statusCode"] == 200
+    assert "NetPilot" in resp["body"]
+
+
